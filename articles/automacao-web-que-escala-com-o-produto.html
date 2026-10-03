@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Automação web que escala com o produto — Leandro Lima</title>
+  <meta name="description" content="Como decidir o que automatizar na web, controlar flake por taxonomia, manter Page Object/fixtures leves e fazer a suíte E2E pagar o próprio custo no CI." />
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="article.css" />
+</head>
+<body>
+  <header class="top">
+    <a class="top__brand" href="../index.html">Leandro Lima</a>
+    <a href="../index.html#artigos">← Artigos</a>
+  </header>
+  <article class="article">
+    <span class="article__tag">Web</span>
+    <h1>Automação web que escala com o produto</h1>
+    <p class="article__meta">Leitura ~13 min · Quality Engineering</p>
+
+    <p>Automatizar a UI inteira é o caminho mais rápido para uma suíte que ninguém confia. O modo de falha clássico: a cada sprint entram dez E2Es “porque a história pediu teste”, seletores amarrados a CSS cosmético, dado compartilhado entre jobs, e em três meses o pipeline amarelo vira clima organizacional. O time aprende a rerodar. Produto aprende a não acreditar. Qualidade vira custo fixo sem sinal.</p>
+
+    <p>Defini a regra oposta: poucos fluxos críticos, estáveis, com contrato de seletor que o time de produto consegue manter. Ferramenta importa — Playwright reduz atrito real — mas ferramenta não substitui modelo mental. O que escala é decidir o que <em>não</em> entra na suíte com a mesma disciplina com que se decide o que entra.</p>
+
+    <div class="callout">
+      <p>E2E web valida orquestração e experiência na jornada. Não é o lugar de revalidar cada regra de campo que o unitário e o contrato de API já cobrem. Se o E2E é a única rede, a pirâmide está invertida e a conta chega em flake.</p>
+    </div>
+
+    <h2>O que automatizar (e o que deixar de fora)</h2>
+
+    <p>Uso quatro filtros antes de abrir um arquivo de teste. Se falhar em dois, não automatizo na UI — documento o gap e cubro em outra camada ou com checklist curto.</p>
+
+    <ol>
+      <li><strong>Valor de regressão.</strong> O fluxo quebra com frequência ou o impacto é alto quando quebra? Checkout, auth, onboarding que gera receita, área logada que desbloqueia uso. Cosmético de marketing raramente passa.</li>
+      <li><strong>Estabilidade de intenção.</strong> A jornada de negócio sobrevive a experimentação de UX? Se o layout muda toda sprint, automatizar pixel é subsidiar o experimento com manutenção eterna.</li>
+      <li><strong>Determinismo de dado e ambiente.</strong> Consigo seed, isolamento e reset? Sem isso, estou automatizando esperança.</li>
+      <li><strong>Custo marginal no CI.</strong> Cada E2E novo tem preço em minutos e em investigação. Se a seleção dinâmica não existe, o custo é pago por todos os PRs — não só pelo autor da feature.</li>
+    </ol>
+
+    <h3>Decisão prática</h3>
+    <ul>
+      <li><strong>Automatizar E2E:</strong> caminho feliz das jornadas irreversíveis ou de alto impacto; 1–2 caminhos de erro que já causaram incidente (ex.: falha de pagamento com retry).</li>
+      <li><strong>Automatizar abaixo da UI:</strong> regras de validação, cálculos, políticas, contratos de API, estados de máquina de workflow.</li>
+      <li><strong>Não automatizar (ainda):</strong> fluxo sob A/B intenso, captcha, animações, conteúdo CMS volátil, “só para aumentar número de testes”.</li>
+      <li><strong>Exploratório / checklist:</strong> acessibilidade pontual profunda, visual em campanha, integrações de terceiros sem sandbox estável.</li>
+    </ul>
+
+    <h2>Page Object vs fixtures: o que padronizei</h2>
+
+    <p>Page Object inchado — classe com 40 métodos e waits escondidos — vira segundo frontend para manter. No outro extremo, teste procedural de 200 linhas duplica seletor e explode no primeiro redesign. O meio termo que funciona no Playwright:</p>
+
+    <ul>
+      <li><strong>Pages/fragments leves:</strong> encapsulam seletor + ação de intenção (<code>cart.submitOrder()</code>), não dormem escondidos. Assert de negócio fica no teste ou em helper de asserção nomeado.</li>
+      <li><strong>Fixtures compostas:</strong> autenticação, conta seedada, feature flag, viewport. Fixture é o lugar certo para setup/teardown; page object não deveria logar usuário em todo método.</li>
+      <li><strong>Factories de dado:</strong> pedidos, usuários, endereços com builder. Proibido “usar a conta do staging que o fulano criou em 2022”.</li>
+      <li><strong>Contrato de seletor:</strong> <code>data-testid</code> (ou role+name acessível) nos pontos da jornada crítica. Padronizei com produto: se o fluxo é coberto por E2E, o testid é parte do Definition of Done da UI — não favor.</li>
+    </ul>
+
+    <p>Quando o time resiste a testid, mostro o custo: três horas por sprint caçando seletor quebrado por mudança de classe CSS. O contrato fica barato perto disso.</p>
+
+    <h2>Taxonomia de flakiness (tratar como bug de engenharia)</h2>
+
+    <p>Flake sem classificação vira lenda (“o CI às vezes falha”). Separei quatro causas — quase todo flake web cai em uma delas — e cada uma tem dono e remédio diferente.</p>
+
+    <h3>1. Timing</h3>
+    <ul>
+      <li><strong>Sintoma:</strong> passa local, falha sob carga do CI; “element not ready”; race após navegação.</li>
+      <li><strong>Remédio:</strong> waits auto-retry do Playwright em asserções; esperar por resposta de rede ou estado (<code>expect(locator).toBeVisible()</code>), nunca <code>sleep</code> fixo como estratégia. Animação: preferir reduzir motion no ambiente de teste ou esperar por condição estável.</li>
+      <li><strong>Métrica:</strong> falhas intermitentes no mesmo passo sem mudança de código.</li>
+    </ul>
+
+    <h3>2. Dado</h3>
+    <ul>
+      <li><strong>Sintoma:</strong> “usuário já existe”, estoque zerado, cupom expirado, ordem em estado inesperado.</li>
+      <li><strong>Remédio:</strong> seed por teste ou por worker; namespaces de dado; cleanup garantido; preferir API de setup em vez de UI para preparar estado.</li>
+      <li><strong>Métrica:</strong> falha que some com rerun sem mudar código + evidência de conflito de estado.</li>
+    </ul>
+
+    <h3>3. Ambiente</h3>
+    <ul>
+      <li><strong>Sintoma:</strong> dependência externa fora, feature flag divergente, cache sujo, browser desatualizado no runner.</li>
+      <li><strong>Remédio:</strong> contrato de ambiente versionado; health check antes da suíte; stubs só onde o risco do terceiro não é o objeto do teste; pin de versão do browser.</li>
+      <li><strong>Métrica:</strong> correlação com incidentes de staging / taxa de erro de dependência.</li>
+    </ul>
+
+    <h3>4. Seletor / superfície</h3>
+    <ul>
+      <li><strong>Sintoma:</strong> quebra após mudança visual sem mudança de regra de negócio.</li>
+      <li><strong>Remédio:</strong> testid/role; proibir seletor frágil (nth-child, texto de marketing); revisão de PR de UI com impacto em jornada coberta.</li>
+      <li><strong>Métrica:</strong> % de falhas pós-refactor CSS sem mudança de copy de negócio.</li>
+    </ul>
+
+    <h3>Quarentena com dono e prazo</h3>
+    <p>Desenhei quarentena curta: teste flaky sai do bloqueio do merge, entra em job visível, ganha ticket com causa taxonomizada, dono (time do domínio, não “QA genérico”) e prazo (ex.: 5 dias úteis). Sem prazo, quarentena é arquivo morto. Sem dono, é mentira coletiva. Meta de saúde: flake rate da suíte bloqueante &lt; 1–2% dos runs em 30 dias.</p>
+
+    <h2>Playbook Playwright + CI</h2>
+
+    <h3>Padrões que valem o custo</h3>
+    <ul>
+      <li>Trace on first retry + screenshot/vídeo sob falha — artefato é parte do teste, não luxo.</li>
+      <li>Projeto/grep por tag de risco: <code>@smoke</code> no PR, <code>@checkout</code> sob mudança de pagamento, full em main/RC.</li>
+      <li>Paralelismo por worker com isolamento de dado; um worker sujo contamina o diagnóstico de todos.</li>
+      <li>Storage state para auth quando o objeto do teste não é o login — economiza minutos e remove flake de IdP.</li>
+      <li>Asserções de API no meio da jornada quando a UI é só casca: menos dependência de pixel, mesmo sinal de orquestração.</li>
+      <li>Contrato com frontend: mudanças em jornadas tagueadas exigem atualização do teste no mesmo PR ou remoção explícita da cobertura.</li>
+    </ul>
+
+    <h3>Seleção no CI</h3>
+    <ol>
+      <li><strong>PR:</strong> smoke da jornada + testes tagueados pelos paths alterados. Orçamento duro (ex.: 15–20 min).</li>
+      <li><strong>Main:</strong> regressão web do inventário crítico.</li>
+      <li><strong>RC / release:</strong> inventário completo acordado + sanidade cross-browser só onde o analytics mostra participação real (não “todos os browsers do mundo”).</li>
+      <li><strong>Agendado noturno:</strong> baterias exploratórias automatizadas de baixo sinal (visual amplo, browsers secundários) — fora do caminho crítico do merge.</li>
+    </ol>
+
+    <h3>Valor versus custo do E2E</h3>
+    <p>Todo trimestre eu confrontamos: minutos de CI × engenheiros impactados × frequência, contra escapes em produção na superfície coberta e tempo médio de diagnóstico quando o E2E falha de verdade. Se o custo sobe e o escape rate não cai, a suíte está cobrindo vaidade ou está flakando. A resposta correta quase nunca é “mais E2E”; é mover asserção para baixo ou matar teste zumbi.</p>
+
+    <h2>Anti-padrões</h2>
+    <ul>
+      <li>E2E para cada campo de formulário.</li>
+      <li>Page Object que esconde <code>sleep</code> e retry infinito.</li>
+      <li>Uma conta de staging compartilhada entre pipelines.</li>
+      <li>Suíte amarela permanente sem quarentena com prazo.</li>
+      <li>Duplicar cobertura de API na UI “por garantia”.</li>
+      <li>Seletores de texto de campanha / A/B.</li>
+      <li>Full browser matrix em todo PR.</li>
+      <li>Ninguém dono da saúde da suíte — flake vira clima, não trabalho.</li>
+    </ul>
+
+    <h2>Ownership da saúde da suíte</h2>
+
+    <p>Padronizei um modelo simples: o time de domínio é dono dos testes da sua jornada; a plataforma de qualidade é dona do runner, dos padrões e das métricas. Review semanal de 20 minutos: top flakes, quarentenas abertas, tempo de suíte, testes sem execução recente. Sem esse ritual, até a melhor taxonomia apodrece.</p>
+
+    <h2>O que eu colocaria em produção na segunda</h2>
+    <ol>
+      <li>Listar as 5 jornadas web de maior blast radius e congelar só essas como E2E bloqueante.</li>
+      <li>Introduzir <code>data-testid</code> (ou role) nessas jornadas com acordo explícito de DoD com frontend.</li>
+      <li>Partir a suíte em tags e ligar seleção por path no CI do PR.</li>
+      <li>Criar fila de quarentena com taxonomia (timing/dado/ambiente/seletor), dono e prazo de 5 dias.</li>
+      <li>Ligar trace/screenshot sob falha e proibir merge bloqueado sem artefato.</li>
+      <li>Migrar setup de estado para factories via API; banir conta compartilhada.</li>
+      <li>Publicar orçamento de tempo do job web e meta de flake rate; revisar em 30 dias.</li>
+      <li>Matar ou descer de camada pelo menos 10% dos E2Es que só reassertam regra já coberta em API/unitário.</li>
+    </ol>
+
+    <div class="callout">
+      <p>Suíte web boa é chata: passa com frequência, falha com significado, e alguém responde pelo amarelo. Quando o time começa a pedir mais automação em vez de evitar o job, o desenho saiu do teatro e entrou em engenharia.</p>
+    </div>
+
+    <p>Na dúvida entre mais um E2E e apagar três flaky: apague. Suíte magra que o time confia vence inventário que ninguém abre.</p>
+
+    <div class="article__foot">
+      <a href="../index.html#artigos">← Voltar aos artigos</a>
+    </div>
+  </article>
+</body>
+</html>

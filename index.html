@@ -1,276 +1,366 @@
-<!DOCTYPE HTML>
-<html>
+<!DOCTYPE html>
+<html lang="pt-BR">
 <head>
-	<title>Analista de Sistemas - Brasília DF - leandrofdx</title>
-	<meta charset="utf-8" />
-	<meta name="viewport" content="width=device-width, initial-scale=1" />
-	<!--[if lte IE 8]><script src="assets/js/ie/html5shiv.js"></script><![endif]-->
-	<link rel="stylesheet" href="assets/css/main.css" />
-	<meta name="description" content="Desenvolvedor e Analista de Testes de Brasília DF" />
-	<meta name="keywords" content="HTML,CSS,XML,Cobol,JCL,Mainframe,Angular 7>,JavaScript,Node.js,Express,MongoDB,Laravel,HP,TypeScript,ECMAScript,Gulp,Sass,PenTest,HTML5,CSS3,SQL,Java EE,Jasmine
-	Selenium WebDriver,Jmeter,Scrum,PSM, Leandrofdx, analista, brasília,df,fullstack,teste">
-    <meta name="author" content="Leandrofdx">
-	<!--[if lte IE 8]><link rel="stylesheet" href="assets/css/ie8.css" /><![endif]-->
-	<link rel="icon" href="images/favicon.ico">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Leandro Lima — Staff Quality Engineer</title>
+  <meta name="description" content="Staff Quality Engineer — engenharia de qualidade de software: automação, performance, acessibilidade, IA, cloud e processo." />
+  <link rel="icon" href="favicon.svg?v=5" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="favicon.svg?v=5" />
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+  <header class="nav">
+    <a class="nav__brand" href="#topo">
+      <img class="nav__icon" src="favicon.svg?v=5" width="28" height="28" alt="" />
+      Leandro Lima
+    </a>
+    <nav class="nav__center" aria-label="Seções">
+      <a href="#atuacao">Atuação</a>
+      <a href="#processo">Processo</a>
+      <a href="#artigos">Artigos</a>
+      <a href="#stack">Stack</a>
+      <a href="#contato">Contato</a>
+    </nav>
+    <div class="nav__end">
+      <a href="https://www.linkedin.com/in/idleandrolima" target="_blank" rel="noopener noreferrer">LinkedIn</a>
+    </div>
+  </header>
 
-	<!-- Header -->
-	<section id="header">
-		<header>
-			<span class="image avatar"></span>
-			<h1 id="logo"><a href="#">Leandro Lima</a></h1>
-			<p>Café, Design, Música, Código e Muito Teste<br />#NãoSejaProlixo
-			</p>
-		</header>
-		<nav id="nav">
-			<ul>
-				<li><a href="#one" class="active">Sobre</a></li>
-				<li><a href="#two">Conhecimentos</a></li>
-				<li><a href="#three">Trabalhos</a></li>
-				<li><a href="#four">Contato</a></li>
-			</ul>
-		</nav>
-		<footer>
-			<ul class="icons">
+  <main id="topo">
+    <section class="hero">
+      <div class="hero__media" aria-hidden="true">
+        <canvas id="hero-canvas" class="hero__canvas"></canvas>
+        <div class="hero__scrim"></div>
+      </div>
+      <div class="hero__content">
+        <p class="hero__eyebrow">Staff Quality Engineer</p>
+        <h1 class="hero__title">Qualidade de software<br />que protege o produto.</h1>
+        <p class="hero__lead">Automação, IA, performance e processo.</p>
+      </div>
+      <a class="hero__scroll" href="#atuacao" aria-label="Ver atuação">
+        <span class="hero__scroll-arrow" aria-hidden="true"></span>
+      </a>
+    </section>
 
-				<li>
-					<a href="https://www.linkedin.com/in/idleandrolima/" target="_blank" alt="Linkedin" class="icon fa-linkedin"><span class="label">Linkedin</span></a>
-				</li>
-				<li>
-					<a href="https://github.com/Leandrofdx/" target="_blank" alt="Github" class="icon fa-github"><span class="label">Github</span></a>
-				</li>
-				<li>
-					<a href="https://www.youtube.com/user/leandrofdx/videos"  target="_blank" alt="Youtube"  class="icon fa-youtube-play"><span class="label">Youtube</span></a>
-				</li>
-			</ul>
-		</footer>
-	</section>
+    <section id="atuacao" class="band band--cinema">
+      <header class="cinema__intro cinema__intro--row reveal">
+        <h2>Atuação.</h2>
+        <div class="carousel__nav" aria-label="Navegar atuação">
+          <button type="button" class="carousel__btn" data-carousel-prev aria-label="Anterior">‹</button>
+          <button type="button" class="carousel__btn" data-carousel-next aria-label="Próximo">›</button>
+        </div>
+      </header>
 
+      <div class="carousel reveal" data-carousel>
+        <div class="carousel__track" tabindex="0" aria-label="Áreas de atuação">
+          <article class="feature carousel__slide">
+            <div class="feature__media"><img src="images/block-aiqa.jpg?v=4" alt="" /></div>
+            <h3>AI QA que aguenta produção.</h3>
+            <p>Agentes, subagentes e conversacional — alucinação, grounding, tool use e evals antes do release.</p>
+          </article>
+          <article class="feature carousel__slide">
+            <div class="feature__media"><img src="images/block-cloud.jpg?v=4" alt="" /></div>
+            <h3>Cloud sob carga real.</h3>
+            <p>AWS, Azure e GCP — ambientes efêmeros e qualidade onde a infra responde.</p>
+          </article>
+          <article class="feature carousel__slide">
+            <div class="feature__media"><img src="images/block-security.jpg?v=4" alt="" /></div>
+            <h3>Privacidade no fluxo.</h3>
+            <p>PII, LGPD e superfícies sensíveis — com base em DPO e ISO 27001.</p>
+          </article>
+          <article class="feature carousel__slide">
+            <div class="feature__media"><img src="images/block-web.jpg?v=4" alt="" /></div>
+            <h3>Automação que escala.</h3>
+            <p>Web, mobile e API com padrões reutilizáveis entre squads.</p>
+          </article>
+          <article class="feature carousel__slide">
+            <div class="feature__media"><img src="images/block-a11y.jpg?v=4" alt="" /></div>
+            <h3>Acessibilidade no caminho crítico.</h3>
+            <p>WCAG com axe no que escala — teclado e leitor de tela no que a ferramenta não vê.</p>
+          </article>
+          <article class="feature carousel__slide">
+            <div class="feature__media"><img src="images/block-qaops.jpg?v=4" alt="" /></div>
+            <h3>Gates sem virar fila.</h3>
+            <p>CI/CD e seleção de testes que protegem a entrega.</p>
+          </article>
+          <article class="feature carousel__slide">
+            <div class="feature__media"><img src="images/block-performance.jpg?v=4" alt="" /></div>
+            <h3>Performance com p99 na esteira.</h3>
+            <p>Carga, OpenTelemetry e Grafana — não só no relatório de sexta.</p>
+          </article>
+        </div>
+      </div>
+    </section>
 
-	<div id="wrapper">
+    <section id="processo" class="band band--cinema">
+      <header class="cinema__intro reveal">
+        <h2>Processo.</h2>
+      </header>
 
+      <div class="feature-grid feature-grid--single reveal">
+        <article class="feature feature--wide">
+          <div class="feature__media feature__media--tall"><img src="images/block-process.jpg?v=4" alt="" /></div>
+          <h3>De ideia a operação.</h3>
+          <p>Processo que o time usa na segunda — critérios de release, papéis e evidência. Sem PDF que ninguém abre.</p>
+        </article>
+      </div>
 
-		<div id="main">
+      <div class="spec reveal">
+        <div class="spec__row">
+          <div class="spec__stat">
+            <p class="spec__label">Etapa</p>
+            <p class="spec__value">01</p>
+          </div>
+          <div class="spec__detail">
+            <h3>Diagnóstico</h3>
+            <p>Onde o risco dói — maturidade, incidentes e gargalos reais.</p>
+          </div>
+        </div>
+        <div class="spec__row">
+          <div class="spec__stat">
+            <p class="spec__label">Etapa</p>
+            <p class="spec__value">02</p>
+          </div>
+          <div class="spec__detail">
+            <h3>Desenho</h3>
+            <p>DoD, release, gates e papéis — cabe numa página.</p>
+          </div>
+        </div>
+        <div class="spec__row">
+          <div class="spec__stat">
+            <p class="spec__label">Etapa</p>
+            <p class="spec__value">03</p>
+          </div>
+          <div class="spec__detail">
+            <h3>Implantação</h3>
+            <p>Esteira, templates e rituais leves. Sem adoção, é slide.</p>
+          </div>
+        </div>
+        <div class="spec__row">
+          <div class="spec__stat">
+            <p class="spec__label">Etapa</p>
+            <p class="spec__value">04</p>
+          </div>
+          <div class="spec__detail">
+            <h3>Medição</h3>
+            <p>Flake, escapes, p99 — o que vira burocracia sai.</p>
+          </div>
+        </div>
+      </div>
+    </section>
 
-			<section id="one">
-				<div class="container">
-					<header class="major">
-						<h2>sobre</h2>
-						<p>Informações pessoas</p>
-					</header>
-					<blockquote>
-						O lema é codificar com semântica e testar com muita responsabilidade, ciente que a informação deve ser para todos - independente de limitações físicas, velocidade do acesso, dispositivo ou browser mesmo que seja o IE.
-					</blockquote>
-					<p>
-						Especialista em testes de performance e testes automatizados para móbile, serviços e web, pós-graduado em engenharia de sistemas de Brasília - vivência em projetos de grande porte e prática em processos ágeis, certificado: 
-						<ul>
-							<li> 
-								<a href="https://cp.certmetrics.com/amazon/pt/public/verify/credential/0753df202ecc4d18863cfe0bfacf287d" target="_blank">AWS Certified Cloud Practitioner</a>
-							</li>
-							<li> 
-								<a href="https://app.exeed.pro/holder/badge/51811" target="_blank">Certified Data Protection Officer</a>
-							</li>
-							<li> 
-								<a href="https://app.exeed.pro/holder/badge/51810" target="_blank">Privacy and Data Protection Practitioner</a>
-							</li>
-							<li> 
-								<a href="https://app.exeed.pro/badge/51193" target="_blank">Privacy and Data Protection Foundation</a>
-							</li>
-							<li> 
-								<a href="https://app.exeed.pro/holder/badge/50883" target="_blank">Security Foundation based on ISO/IEC 27001</a>
-							</li>
-							<li> 
-								<a href="https://www.certiprof.com/successful-candidates-register-by-cp/" target="_blank" alt="Devops">DevOps Professional CP# 31016267</a>
-							</li>
-							<li>
-								<a href="https://www.certiprof.com/successful-candidates-register-by-cp/" alt="SFPC" target="_blank">Scrum Foundation Professional - SFPC CP# 31047295</a>
-							</li>
-							<li>
-								<a href="https://exeed.pro/badge/11194" target="_blank" alt="Cloud">Cloud Computing</a>
-							</li>
-							<li>
-								<a href="https://www.scrum.org/user/135766" alt="PSM1" target="_blank">Scrum Master - PSMI</a>
-							</li>
-							<li>
-								<a href="https://www.bstqb.org.br/verificador-certificado?field_certificado_numero_value=17-CTFL-AT-06273-BR" target="_blank">Certified Tester Foundation Level Agile Tester - CTFL-AT</a>
-							</li>
-							<li>
-								<a href="https://www.bstqb.org.br/verificador-certificado?field_certificado_numero_value=15-CTFL-04303-BR" target="_blank">Certified Tester Foundation Level - CTFL</a>
-							</li>
-						</ul>
-					</p>
-				</div>
-			</section>
+    <section id="trajetoria" class="band band--cinema">
+      <header class="cinema__intro reveal">
+        <h2>Trajetória.</h2>
+      </header>
 
+      <div class="spec reveal">
+        <div class="spec__row">
+          <div class="spec__stat">
+            <p class="spec__label">Atual</p>
+            <p class="spec__value spec__value--text">Staff</p>
+          </div>
+          <div class="spec__detail">
+            <h3>Staff Quality Engineer</h3>
+            <p>AI QA &amp; QAOps · produto de IA generativa</p>
+          </div>
+        </div>
+        <div class="spec__row">
+          <div class="spec__stat">
+            <p class="spec__label">Antes</p>
+            <p class="spec__value spec__value--text">Lead</p>
+          </div>
+          <div class="spec__detail">
+            <h3>Lead Quality Engineer</h3>
+            <p>QAOps &amp; Test Automation · 5 squads</p>
+          </div>
+        </div>
+        <div class="spec__row">
+          <div class="spec__stat">
+            <p class="spec__label">Foco</p>
+            <p class="spec__value spec__value--text">Perf</p>
+          </div>
+          <div class="spec__detail">
+            <h3>Senior Performance Engineering Specialist</h3>
+            <p>Performance Testing · até 50 mil RPS</p>
+          </div>
+        </div>
+        <div class="spec__row">
+          <div class="spec__stat">
+            <p class="spec__label">Escopo</p>
+            <p class="spec__value spec__value--text">Arch</p>
+          </div>
+          <div class="spec__detail">
+            <h3>Quality Architect</h3>
+            <p>Resiliência, Chaos Mesh e ambientes efêmeros</p>
+          </div>
+        </div>
+        <div class="spec__row">
+          <div class="spec__stat">
+            <p class="spec__label">Base</p>
+            <p class="spec__value spec__value--text">QE</p>
+          </div>
+          <div class="spec__detail">
+            <h3>Quality Engineering Specialist</h3>
+            <p>Test Automation · prática estruturada do zero</p>
+          </div>
+        </div>
+      </div>
 
-			<section id="two">
-				<div class="container">
-					<h3>Tecnologias</h3>
-					<p>Segue abaixo a lista de algumas tecnologias que utilizo para desenvolver e testar em cultura Ágil.</p>
-					<ul class="feature-icons">
-					        <li class="fa-code">Cobol - JCL</li>
-						 <li class="fa-code">Mainframe</li>
- 						<li class="fa-code">Angular 5 +</li>
-						<li class="fa-code">JavaScript</li>
-						<li class="fa-code">Node.js</li>
-						<li class="fa-code">Express</li>
-						<li class="fa-code">MongoDB</li>
-						<li class="fa-code">Laravel</li>
-						<li class="fa-code">PHP</li>
-						<li class="fa-code">TypeScript</li>
-						<li class="fa-code">ECMAScript </li>
-						<li class="fa-code">Gulp</li>
-						<li class="fa-code">Sass</li>
-						<li class="fa-code">PenTest</li>
-						<li class="fa-code">HTML5</li>
-						<li class="fa-code">CSS3</li>
-						<li class="fa-code">SQL</li>
-						<li class="fa-code">Java EE</li>
-						<li class="fa-code">Jasmine</li>
-						<li class="fa-code">Selenium WebDriver</li>
-						<li class="fa-code">Jmeter</li>
-						<li class="fa-code">Scrum ++</li>
-					</ul>
-				</div>
-			</section>
-			<section id="three">
-				<div class="container">
-					<h3>Sistemas</h3>
-					<p>Segue abaixo a lista de alguns trabalhos/sistemas desenvolvidos do design ao back-end. <br>
-					ps: As requests podem ser um pouco mais lenda por conta da hospedagem FREE</p>
+      <p class="cinema__note reveal">Financeiro · Saúde · Varejo · E-commerce · Educação · Agro · Governo</p>
+    </section>
 
-					<div class="features">
-						<article>
-							<a href="https://adsumus.herokuapp.com/#/" target="_blank" alt="Adsumus Gerenciador de Páginas Web" class="image">
-								<img src="images/adsumus.jpg" alt="Adsumus Gerenciador de Páginas Web" /></a>
-							<div class="inner">
-								<h4>Adsumus - Gerenciador de Páginas Web</h4>
-								<p>
-									Adsumus é uma APP que permite gerar páginas na aplicação, adicionando algumas características como: Trucagem de texto, geração e tratamento de SLUG, geração e reaproveitamento de palavras chaves e tags, além de adicionar, alterar e excluir. <br>
-									Front-End em: Angular 5 e TypeScript;<br>
-									Back-End (API) em: Nodejs, Express e MongoDB.
+    <section id="labs" class="band band--cinema">
+      <header class="cinema__intro reveal">
+        <h2>Labs.</h2>
+      </header>
+      <div class="feature-grid reveal">
+        <a class="feature" href="https://github.com/Leandrofdx/ai-testing-lab" target="_blank" rel="noopener noreferrer">
+          <div class="feature__media"><img src="images/block-aiqa.jpg?v=4" alt="" /></div>
+          <h3>Laboratório de AI QA.</h3>
+          <p>Agentes, RAG, alucinação e evals. ai-testing-lab →</p>
+        </a>
+        <a class="feature" href="https://github.com/Leandrofdx/ai-graylog" target="_blank" rel="noopener noreferrer">
+          <div class="feature__media"><img src="images/block-performance.jpg?v=4" alt="" /></div>
+          <h3>Observabilidade sob carga.</h3>
+          <p>OpenTelemetry, Jaeger e logs. ai-graylog →</p>
+        </a>
+        <a class="feature feature--wide" href="https://github.com/Leandrofdx/loja-performance" target="_blank" rel="noopener noreferrer">
+          <div class="feature__media"><img src="images/block-cloud.jpg?v=4" alt="" /></div>
+          <h3>Performance em e-commerce.</h3>
+          <p>Grafana, Prometheus e Jaeger. loja-performance →</p>
+        </a>
+      </div>
+    </section>
 
-								</p>
-								<a href="https://adsumus.herokuapp.com/#/" target="_blank" alt="Adsumus Gerenciador de Páginas Web">Click aqui para acessar</a>
-							</div>
-						</article>
+    <section id="artigos" class="band band--soft">
+      <header class="band__intro reveal">
+        <h2>Artigos.</h2>
+      </header>
+      <div class="articles reveal">
+        <a class="article-card" href="articles/avaliando-llm-rag-sem-prompt-theatre.html"><span class="article-card__tag">AI QA</span><h3>Avaliando LLM/RAG sem virar “prompt theatre”</h3></a>
+        <a class="article-card" href="articles/quality-gates-que-nao-travam-a-entrega.html"><span class="article-card__tag">CI/CD</span><h3>Quality Gates que não travam a entrega</h3></a>
+        <a class="article-card" href="articles/visao-de-risco-o-que-testar.html"><span class="article-card__tag">Risco</span><h3>Visão de risco: o que testar quando o tempo acaba</h3></a>
+        <a class="article-card" href="articles/performance-testing-continuo-p99.html"><span class="article-card__tag">Performance</span><h3>Performance Testing contínuo: do pico ao p99</h3></a>
+        <a class="article-card" href="articles/observabilidade-como-ferramenta-de-qa.html"><span class="article-card__tag">Observabilidade</span><h3>Observabilidade como ferramenta de QA</h3></a>
+        <a class="article-card" href="articles/automacao-web-que-escala-com-o-produto.html"><span class="article-card__tag">Web</span><h3>Automação web que escala com o produto</h3></a>
+        <a class="article-card" href="articles/automacao-mobile-release-semanal.html"><span class="article-card__tag">Mobile</span><h3>Automação mobile que sobrevive a release semanal</h3></a>
+        <a class="article-card" href="articles/contract-testing-em-apis.html"><span class="article-card__tag">API</span><h3>Contract testing em arquitetura de APIs</h3></a>
+        <a class="article-card" href="articles/farms-e-ambientes-efemeros.html"><span class="article-card__tag">Plataforma</span><h3>Farms e ambientes efêmeros: custo vs confiança</h3></a>
+        <a class="article-card" href="articles/acessibilidade-como-qualidade-de-produto.html"><span class="article-card__tag">Acessibilidade</span><h3>Acessibilidade como qualidade de produto</h3></a>
+        <a class="article-card" href="articles/carreira-em-quality-engineering.html"><span class="article-card__tag">Carreira</span><h3>Carreira em Quality Engineering</h3></a>
+        <a class="article-card" href="articles/dias-dificeis-visao-de-carreira-e-reinvencao.html"><span class="article-card__tag">Carreira</span><h3>Dias difíceis: visão e reinvenção</h3></a>
+      </div>
+    </section>
 
-						<article>
-							<a href="https://conhecimentos.herokuapp.com/" target="_blank" alt="Teste de Conhecimentos" class="image"><img src="images/teste-conhecimentos.jpg" alt="Teste de Conhecimentos" /></a>
-							<div class="inner">
-								<h4>Teste de Conhecimentos</h4>
-								<p>
-									É um quiz onde os usuários podem validar seus conhecimentos de forma descontraída. Construído com Angular 5, NodeJs, TypeScript, Express, REST e conceito Mobile First.
-								</p>
-								<a href="https://conhecimentos.herokuapp.com/" target="_blank" alt="Teste de Conhecimentos">Click aqui para acessar</a>
-							</div>
-						</article>
-						<article>
-							<a href="https://new-investiments.herokuapp.com/" target="_blank" alt="Investment System" class="image"><img src="images/investment.jpg" alt="Investment System" /></a>
-							<div class="inner">
-								<h4>Investment System</h4>
-								<p>É um sistema responsivo que permite realizar investimentos em moedas estrangeiras. Construído com Angular 4, NodeJs, TypeScript, Express e MongoDB</p>
-								<a href="https://new-investiments.herokuapp.com/" target="_blank" alt="Investment System">Click aqui para acessar</a>
-							</div>
-						</article>
-						<article>
-							<a href="https://investiments.herokuapp.com/"  target="_blank" alt="Investment Consulting" class="image"><img src="images/consultingx.jpg" alt="Investment Consulting" /></a>
-							<div class="inner">
-								<h4>Investment Consulting</h4>
-								<p>O intento do protótipo é construir um fluxo de investimento simplificado; para que em seguida seja sugerido os cinco melhores investimentos e/ou afins.</p>
-								<a href="https://investiments.herokuapp.com/" target="_blank" alt="Investment System">Click aqui para acessar</a>
-							</div>
-						</article>
-						<article>
-							<a href="#this" class="image"><img src="images/pizzaria.jpg" alt="Pizzaria" /></a>
-							<div class="inner">
-								<h4>Pizzaria</h4>
-								<p>É um sistema que permite a seleção de borda, tamanho e ingredientes diversos - o processo é feito em etapas e no final do pedido são realizados cálculos referente a frete e desconto por tempo de espera.</p>
-							</div>
-						</article>
-						<article>
-							<a href="#this" class="image"><img src="images/aluno.jpg" alt="Projeto Aluno Móvel" /></a>
-							<div class="inner">
-								<h4>Aluno Móvel</h4>
-								<p>O projeto Aluno Móvel objetivou construir um ambiente web que permita aos usuários acessarem informações pessoais e acadêmicas como boletins, ficha financeira, de qualquer lugar, por qualquer dispositivo com acesso à internet de maneira simples e eficiente.</p>
-							</div>
-						</article>
-						<article>
-							<a href="#" class="image"><img src="images/apostas.jpg" alt="Apostas" /></a>
-							<div class="inner">
-								<h4>Apostas</h4>
-								<p>É um pequeno sistema de apostas feito em HTML5, css3 e puro JavaScript. Este componente foi atualizado para ECMAScript 2015.</p>
-							</div>
-						</article>
-					</div>
-				</div>
-			</section>
+    <section id="stack" class="band band--dark band--stack">
+      <header class="band__intro reveal">
+        <h2>Stack.</h2>
+      </header>
+      <dl class="stack-list reveal">
+        <div>
+          <dt>Linguagens</dt>
+          <dd>Java · BeanShell · Groovy · Python · JavaScript</dd>
+        </div>
+        <div>
+          <dt>Web</dt>
+          <dd>Playwright · Cypress · Selenium · Robot Framework</dd>
+        </div>
+        <div>
+          <dt>Mobile</dt>
+          <dd>Appium · Espresso · XCUITest · BrowserStack</dd>
+        </div>
+        <div>
+          <dt>API</dt>
+          <dd>RestAssured · Karate · Requests · Postman · Pact</dd>
+        </div>
+        <div>
+          <dt>Frameworks</dt>
+          <dd>Pytest · JUnit · TestNG · Cucumber · Allure</dd>
+        </div>
+        <div>
+          <dt>Acessibilidade</dt>
+          <dd>WCAG 2.2 · axe-core · NVDA · VoiceOver · ARIA</dd>
+        </div>
+        <div>
+          <dt>IA</dt>
+          <dd>Agentes · Subagentes · Conversacional · RAG · Alucinação · LLM Evals · LLM-as-a-judge · Red team</dd>
+        </div>
+        <div>
+          <dt>Cloud</dt>
+          <dd>AWS · Azure · GCP</dd>
+        </div>
+        <div>
+          <dt>Segurança</dt>
+          <dd>LGPD · PII · ISO 27001</dd>
+        </div>
+        <div>
+          <dt>Dados</dt>
+          <dd>PostgreSQL · MongoDB · Kafka · SQL</dd>
+        </div>
+        <div>
+          <dt>CI/CD</dt>
+          <dd>GitHub Actions · Azure DevOps · Jenkins · GitLab CI</dd>
+        </div>
+        <div>
+          <dt>Performance</dt>
+          <dd>k6 · JMeter · Gatling · OpenTelemetry · Grafana</dd>
+        </div>
+        <div>
+          <dt>Plataforma</dt>
+          <dd>Kubernetes · Docker · Terraform · Chaos Mesh · Linux · Git</dd>
+        </div>
+      </dl>
+    </section>
 
-			<section id="four">
-				<div class="container">
-					<h3>Site e Design</h3>
-					<p>Abaixo tem alguns projetos de desenvolvimento de Site e Design - não posso publicar outras pages/HotSites por ser páginas internas/institucionais.</p>
-					<div class="features">
-						<article>
-							<a href="#this" class="image"><img src="images/time.jpg" alt="Site Time Corretora de Seguros" /></a>
-							<div class="inner">
-								<h4>Site - Time Corretora</h4>
-								<p>Foi construido um site responsivo para uma corretora de seguros de Brasília, onde é possível realizar simulações de cotação.</p>
-								<a href="https://timecorretora.com/" target="_blank" alt="Time Corretora de Seguros">Click aqui para acessar</a>
-							</div>
-						</article>
-						<article>
-							<a href="#this" class="image"><img src="images/discovery.jpg" alt="Discovery Cursos" /></a>
-							<div class="inner">
-								<h4>Logo - Discovery</h4>
-								<p>Foi criada para uma empresa que oferece cursos de tecnologia em Brasília.</p>
-							</div>
-						</article>
-						<article>
-							<a href="#this" class="image"><img src="images/absorver.jpg" alt="" /></a>
-							<div class="inner">
-								<h4>Design</h4>
-								<p>A imagem foi construída no photoshop, apenas por hobby. </p>
-							</div>
-						</article>
-					</div>
-				</div>
-			</section>
-			<section id="five">
-				<div class="container">
-					<h3>Contato</h3>
-					<code>leandrofdx@gmail.com</code>
-				</div>
-			</section>
-		</div>
+    <section id="certificacoes" class="band">
+      <header class="band__intro reveal">
+        <h2>Certificações.</h2>
+      </header>
+      <div class="cert-grid reveal">
+        <a class="cert" href="https://www.bstqb.org.br/verificador-certificado?field_certificado_numero_value=17-CTFL-AT-06273-BR" target="_blank" rel="noopener noreferrer"><strong>ISTQB CTFL-AT</strong><span>17-CTFL-AT-06273-BR</span></a>
+        <a class="cert" href="https://www.bstqb.org.br/verificador-certificado?field_certificado_numero_value=15-CTFL-04303-BR" target="_blank" rel="noopener noreferrer"><strong>ISTQB CTFL</strong><span>15-CTFL-04303-BR</span></a>
+        <a class="cert" href="https://cp.certmetrics.com/amazon/pt/public/verify/credential/0753df202ecc4d18863cfe0bfacf287d" target="_blank" rel="noopener noreferrer"><strong>AWS Certified Cloud Practitioner</strong><span>AWS</span></a>
+        <a class="cert" href="https://app.exeed.pro/holder/badge/51811" target="_blank" rel="noopener noreferrer"><strong>Certified Data Protection Officer</strong><span>EXIN</span></a>
+        <a class="cert" href="https://app.exeed.pro/holder/badge/51810" target="_blank" rel="noopener noreferrer"><strong>Privacy and Data Protection Practitioner</strong><span>EXIN</span></a>
+        <a class="cert" href="https://app.exeed.pro/badge/51193" target="_blank" rel="noopener noreferrer"><strong>Privacy and Data Protection Foundation</strong><span>EXIN</span></a>
+        <a class="cert" href="https://app.exeed.pro/holder/badge/50883" target="_blank" rel="noopener noreferrer"><strong>Security Foundation based on ISO/IEC 27001</strong><span>EXIN</span></a>
+        <a class="cert" href="https://exeed.pro/badge/11194" target="_blank" rel="noopener noreferrer"><strong>Cloud Computing</strong><span>EXIN</span></a>
+        <a class="cert" href="https://www.scrum.org/user/135766" target="_blank" rel="noopener noreferrer"><strong>Scrum Master — PSM I</strong><span>Scrum.org</span></a>
+      </div>
+    </section>
 
-		<section id="footer">
-			<div class="container">
-				<ul class="copyright">
-					<li>All rights reserved.</li></li>
-				</ul>
-			</div>
-		</section>
+    <section id="contato" class="cta reveal">
+      <h2>Vamos conversar.</h2>
+      <p>Brasília. Remoto.</p>
+      <a class="cta__email" href="mailto:id.leandrolima@gmail.com">id.leandrolima@gmail.com</a>
+    </section>
+  </main>
 
-	</div>
+  <footer class="foot">
+    <a href="mailto:id.leandrolima@gmail.com">id.leandrolima@gmail.com</a>
+    <a href="https://www.linkedin.com/in/idleandrolima" target="_blank" rel="noopener noreferrer">LinkedIn</a>
+    <a href="https://github.com/Leandrofdx" target="_blank" rel="noopener noreferrer">GitHub</a>
+    <a href="https://www.youtube.com/@areafdx" target="_blank" rel="noopener noreferrer">YouTube</a>
+  </footer>
 
-	<script src="assets/js/jquery.min.js"></script>
-	<script src="assets/js/jquery.scrollzer.min.js"></script>
-	<script src="assets/js/jquery.scrolly.min.js"></script>
-	<script src="assets/js/skel.min.js"></script>
-	<script src="assets/js/util.js"></script>
-	<!--[if lte IE 8]><script src="assets/js/ie/respond.min.js"></script><![endif]-->
-	<script src="assets/js/main.js"></script>
-<!-- Global site tag (gtag.js) - Google Analytics -->
-	<script async src="https://www.googletagmanager.com/gtag/js?id=UA-40408502-1"></script>
-	<script>
-	  window.dataLayer = window.dataLayer || [];
-	  function gtag(){dataLayer.push(arguments);}
-	  gtag('js', new Date());
-
-	  gtag('config', 'UA-40408502-1');
-	</script>
-
+  <script src="hero-bg.js"></script>
+  <script src="carousel.js"></script>
+  <script>
+    const els = document.querySelectorAll(".reveal");
+    const io = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((e) => {
+          if (e.isIntersecting) {
+            e.target.classList.add("is-visible");
+            io.unobserve(e.target);
+          }
+        });
+      },
+      { threshold: 0.18, rootMargin: "0px 0px -8% 0px" }
+    );
+    els.forEach((el) => io.observe(el));
+  </script>
 </body>
 </html>

@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Avaliando LLM/RAG sem virar “prompt theatre” — Leandro Lima</title>
+  <meta name="description" content="Avaliação séria de LLM/RAG: retrieval vs geração, golden sets versionados, rubricas LLM-as-a-judge com amostragem humana, red team, gates de custo/latência, baseline e privacidade no pipeline." />
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="article.css" />
+</head>
+<body>
+  <header class="top">
+    <a class="top__brand" href="../index.html">Leandro Lima</a>
+    <a href="../index.html#artigos">← Artigos</a>
+  </header>
+  <article class="article">
+    <span class="article__tag">AI QA</span>
+    <h1>Avaliando LLM/RAG sem virar “prompt theatre”</h1>
+    <p class="article__meta">Leitura ~12 min · Quality Engineering</p>
+
+    <p>Demo com prompt caprichado impressiona stakeholder. Produção com alucinação, grounding fraco, vazamento de contexto e custo por request fora de controle destrói confiança. A tese de AI QA é o oposto do teatro: dataset versionado, métrica com baseline, gate no pipeline e amostragem humana. Sem isso, cada “melhoramos o prompt” é anedota irreprodutível.</p>
+    <p>O failure mode mais caro é julgar a resposta gerada quando a recuperação já falhou. O time debate temperatura e system prompt enquanto o chunk certo nunca entra no contexto. Segundo failure mode: trocar modelo/embedding toda semana sem repor baseline — você não sabe se melhorou ou se o juiz LLM ficou mais generoso.</p>
+
+    <div class="callout">
+      <p>Se retrieval está errado, score de geração é ruído. Separe os evals. Corrija a etapa culpada. Só então discuta prompt.</p>
+    </div>
+
+    <h2>Framework: duas camadas, uma disciplina de baseline</h2>
+    <p>Desenhei a avaliação de RAG em duas baterias independentes, mais uma de sistema ponta a ponta.</p>
+
+    <h3>Retrieval (antes de gerar)</h3>
+    <ul>
+      <li><strong>Hit rate / Recall@k</strong> — o documento ou passagem gold está no top-k?</li>
+      <li><strong>MRR / nDCG</strong> — quando a ordem importa para o prompt.</li>
+      <li><strong>Context precision/relevância</strong> — quantos chunks recuperados são de fato úteis (estilo RAGAS context_precision / context_relevancy).</li>
+      <li><strong>Cobertura de intenção</strong> — queries de cauda longa e sinônimos do domínio, não só happy path.</li>
+    </ul>
+
+    <h3>Geração (com contexto controlado)</h3>
+    <ul>
+      <li><strong>Fidelidade / groundedness</strong> — a resposta afirma só o que o contexto sustenta?</li>
+      <li><strong>Answer relevancy</strong> — responde a pergunta pedida?</li>
+      <li><strong>Completeness</strong> — omite restrição crítica (prazo, exclusão, dosagem, cláusula)?</li>
+      <li><strong>Formato e tool use</strong> — JSON schema, citações, recusa quando não há evidência.</li>
+    </ul>
+
+    <h3>Sistema (RAG completo)</h3>
+    <p>Só depois das duas camadas: pipeline real (retrieve → rerank → generate). Métricas compostas tipo faithfulness + answer_relevancy (família RAGAS), asserts programáticos (DeepEval-style) e suites declarativas (Promptfoo-style) no CI. O pensamento importa mais que a marca da lib: casos versionados, scores limiarizados, relatório diff contra baseline.</p>
+
+    <h2>Playbook</h2>
+
+    <h3>1. Golden set versionado</h3>
+    <p>Padronizei golden sets como artefato de engenharia, não planilha no Drive:</p>
+    <ul>
+      <li>Repo ou dataset registry com tag (semver): inputs, contexto gold, resposta esperada ou rubrica, metadados (idioma, intent, risco).</li>
+      <li>Splits: regression (estável), exploratory (cresce), adversarial (red team).</li>
+      <li>PR de mudança de dataset exige diff e motivo — “achei melhor” não mergeia.</li>
+      <li>Tamanho honesto: 50–200 casos bem curados batem 5.000 sintéticos sem revisão.</li>
+    </ul>
+
+    <h3>2. LLM-as-a-judge com rubrica — e humano no loop</h3>
+    <p>Juiz LLM escala, mas herda viés. Eu só uso com:</p>
+    <ol>
+      <li>Rubrica explícita (critérios, pesos, exemplos de score 1 vs 5).</li>
+      <li>Mesmo modelo-juiz e prompt-juiz versionados no baseline.</li>
+      <li>Amostragem humana periódica (ex.: 5–10%/semana ou todo release) com kappa/acordo mínimo; se divergir, recalibra rubrica.</li>
+      <li>Asserts determinísticos onde der (regex, JSON schema, proibições de frase, presença de citation id) — juiz só no subjetivo.</li>
+    </ol>
+
+    <h3>3. Red team no pipeline, não em workshop</h3>
+    <ul>
+      <li><strong>Prompt injection</strong> — instruções no documento recuperado e no input do usuário tentando override de system.</li>
+      <li><strong>Jailbreak / exfiltração</strong> — pedidos de system prompt, chaves, dados de outros tenants.</li>
+      <li><strong>PII</strong> — o sistema deve recusar ou mascarar; eval verifica vazamento em output e em logs enviados ao provedor.</li>
+      <li><strong>Dados sensíveis no índice</strong> — chunk que não deveria estar searchable.</li>
+    </ul>
+    <p>Esses casos entram no split adversarial e falham o job como qualquer regressão funcional. Workshop único sem gate é teatro de segurança.</p>
+
+    <h3>4. Gates de custo e latência</h3>
+    <p>Qualidade sem economia é release suicida em LLM. No mesmo pipeline de eval:</p>
+    <ul>
+      <li>Tokens in/out médios e p95 por caso (e custo estimado por 1k requests).</li>
+      <li>Latência p95 retrieve, generate e end-to-end.</li>
+      <li>Teto por journey; regressão &gt;X% contra baseline bloqueia merge ou exige waiver assinado.</li>
+    </ul>
+    <p>Demo local com modelo menor e cache quente não é evidência. Gate roda na config de staging (modelo, região, concurrency).</p>
+
+    <h3>5. Disciplina de baseline</h3>
+    <p>Defini: toda mudança de prompt, modelo, embedding, chunking ou reranker gera run de eval completo; o relatório é diff vs última baseline tagged. Aceite só com:</p>
+    <ul>
+      <li>Métricas primárias ≥ baseline (ou trade-off explícito documentado).</li>
+      <li>Nenhum caso P0 adversarial novo falhando.</li>
+      <li>Custo/latência dentro do orçamento.</li>
+    </ul>
+    <p>“Melhorou na minha opinião” não é release criterion.</p>
+
+    <h3>6. Privacidade no pipeline</h3>
+    <ul>
+      <li>Golden set sem PII real — sintetizar ou anonimizar com política clara.</li>
+      <li>Scan automatizado de PII em outputs e em payloads enviados a APIs de modelo.</li>
+      <li>Controles de retenção no provedor; opt-out de training onde existir.</li>
+      <li>Testes de isolamento multi-tenant no retrieve (não vazar chunk de tenant B).</li>
+    </ul>
+
+    <h3>7. Como pensar no estilo RAGAS / DeepEval / Promptfoo</h3>
+    <p>Não importa qual lib você escolhe no trimestre — importa o desenho mental:</p>
+    <ul>
+      <li><strong>RAGAS-style</strong> — métricas decomponíveis (context recall, faithfulness, answer relevancy) que forçam a separar retrieval de geração.</li>
+      <li><strong>DeepEval-style</strong> — asserts no código de teste (“a resposta deve citar X”, “não deve inventar Y”) rodando no pytest/CI como qualquer unit.</li>
+      <li><strong>Promptfoo-style</strong> — suíte declarativa YAML/JSON com providers, prompts e assertions; bom para matrix de modelo × prompt × caso.</li>
+    </ul>
+    <p>Eu combino: dataset versionado + asserts determinísticos no CI crítico + métricas decomponíveis no job de regressão + matrix só quando estou comparando mudanças de prompt/modelo de propósito. Matrix eterna em todo PR é custo sem sinal.</p>
+
+    <h3>8. Falhas típicas de retrieval que o time culpa no LLM</h3>
+    <p>Antes de “melhorar o prompt”, verifico:</p>
+    <ul>
+      <li>Chunking que parte tabela/cláusula no meio — recall até sobe, fidelidade cai.</li>
+      <li>Embedding desatualizado após reindex parcial.</li>
+      <li>Filtros de metadados (tenant, produto, idioma) ausentes ou errados.</li>
+      <li>Top-k alto enchendo contexto de ruído; modelo “escolhe” o chunk errado.</li>
+      <li>Query do usuário ≠ query de retrieve (falta query rewrite / HyDE quando o domínio exige).</li>
+    </ul>
+    <p>Cada item vira caso no golden de retrieval com documento gold explícito. Sem documento gold, você não tem eval de retrieve — tem opinião.</p>
+
+    <h3>9. Release criterion mínimo para RAG</h3>
+    <p>Defini um cartão de release que o PR precisa anexar (automatizado no relatório):</p>
+    <ol>
+      <li>Diff vs baseline tagged (métricas primárias).</li>
+      <li>Lista de casos novos falhando (zero P0 adversarial).</li>
+      <li>Custo e latência p95 dentro do orçamento.</li>
+      <li>Amostragem humana do ciclo ainda válida (data) ou refeita neste release.</li>
+      <li>Scan de PII/injection verde.</li>
+    </ol>
+    <p>Se o time não consegue preencher o cartão, não há evidência — há demo.</p>
+
+    <h2>Anti-padrões</h2>
+    <ul>
+      <li><strong>Prompt theatre</strong> — demo ao vivo como prova de qualidade.</li>
+      <li><strong>Um score único mágico</strong> — esconde falha de retrieval atrás de prosa fluente.</li>
+      <li><strong>Juiz LLM sem amostragem humana</strong> — você otimiza para o juiz, não para o usuário.</li>
+      <li><strong>Dataset estacionário por meses</strong> — produto mudou; eval mente.</li>
+      <li><strong>Troca de modelo sem baseline</strong> — narrativa de upgrade sem evidência.</li>
+      <li><strong>Red team só em slide</strong> — zero casos no CI.</li>
+      <li><strong>Ignorar custo</strong> — qualidade “perfeita” a R$ por request inviável.</li>
+      <li><strong>Avaliar só happy path em português formal</strong> — cauda longa, typo, mix de idiomas e tom agressivo quebram em prod.</li>
+    </ul>
+
+    <h2>Checklist de segunda</h2>
+    <ol>
+      <li>Separe o último bug de “resposta errada”: foi miss de retrieval ou geração infiel? Abra o trace/chunks.</li>
+      <li>Versionar o golden set atual (tag); proíba edição silenciosa na main sem PR.</li>
+      <li>Rodar eval de retrieval@k e de faithfulness em isolation; publique os dois números no canal do time.</li>
+      <li>Adicionar 10 casos adversariais (injection + PII) se ainda não existem; ligar no CI.</li>
+      <li>Registrar baseline de custo/latência p95 na config de staging.</li>
+      <li>Amostrar 20 outputs da semana para revisão humana contra a rubrica; anotar divergências com o juiz.</li>
+      <li>Bloquear próximo “vamos trocar o modelo” sem job de diff contra a baseline tagged.</li>
+    </ol>
+
+    <p>Demo bonita continua existindo. Eu só paro de confundir aplauso com release. Se não tem baseline e diff, para mim ainda é ensaio — e ensaio não vai para produção.</p>
+
+    <div class="article__foot">
+      <a href="../index.html#artigos">← Voltar aos artigos</a>
+    </div>
+  </article>
+</body>
+</html>

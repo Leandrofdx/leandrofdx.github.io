@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Quality Gates que não travam a entrega — Leandro Lima</title>
+  <meta name="description" content="Como desenhar quality gates em camadas — rápidos, sob mudança e caros — com limiares baseados em risco, bypass auditado e falhas que o time consegue agir." />
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="article.css" />
+</head>
+<body>
+  <header class="top">
+    <a class="top__brand" href="../index.html">Leandro Lima</a>
+    <a href="../index.html#artigos">← Artigos</a>
+  </header>
+  <article class="article">
+    <span class="article__tag">CI/CD</span>
+    <h1>Quality Gates que não travam a entrega</h1>
+    <p class="article__meta">Leitura ~12 min · Quality Engineering</p>
+
+    <p>Gate que só aparece no fim do pipeline e diz “não” não protege o usuário — treina o time a odiar qualidade. O modo de falha é previsível: a suíte completa roda em todo commit, o feedback chega em 40–90 minutos, o vermelho vira ruído e alguém inventa um atalho informal. Em poucas sprints o gate deixa de ser sinal de risco e vira obstáculo político.</p>
+
+    <p>Defini o contrário: gate é um contrato de risco com custo explícito. Ele entra cedo quando o risco é barato de detectar, escala quando a mudança toca superfície crítica, e só cobra o teste caro quando o impacto justifica a espera. Se a entrega acelera e a produção fica mais calma, o desenho está certo. Se o pipeline engorda e os incidentes continuam os mesmos, o gate está medindo vaidade.</p>
+
+    <div class="callout">
+      <p>Gate bom responde três perguntas em menos de um minuto: o que falhou, qual o impacto estimado, e o que eu preciso olhar agora. Sem artefato, sem dono e sem tendência, vermelho é teatro.</p>
+    </div>
+
+    <h2>Modelo mental: três camadas, um orçamento de tempo</h2>
+
+    <p>Padronizei gates em três camadas com orçamento de tempo fixo. O orçamento importa mais que a lista de ferramentas: se a camada rápida passa de ~8–12 minutos, o time começa a empilhar commits e o feedback perde valor. Se a camada cara roda em todo PR, alguém vai pedir para “só desligar no hotfix” — e o desligamento informal vira processo.</p>
+
+    <h3>Camada 1 — rápida e barata (todo push / todo PR)</h3>
+    <ul>
+      <li>Lint, typecheck, unitários do pacote alterado e dos módulos com dependência direta.</li>
+      <li>Smoke de contrato ou schema nos endpoints tocados (Pact verify local ou OpenAPI diff).</li>
+      <li>Checks de segurança óbvios e baratos: secrets no diff, dependência crítica com CVE conhecido no lockfile alterado.</li>
+      <li>Critério de passagem: falha determinística. Flake aqui é bug de infraestrutura do CI, não “às vezes”. Meta: taxa de falso positivo &lt; 1% em 30 dias.</li>
+    </ul>
+
+    <h3>Camada 2 — disparada por mudança (change-triggered)</h3>
+    <ul>
+      <li>Regressão selecionada por path, tag de risco ou grafo de serviço (não “a suíte inteira”).</li>
+      <li>Pact consumer/provider nos serviços cujo contrato ou implementação mudou.</li>
+      <li>Smoke E2E da jornada que o diff toca — login se mexeu em auth, checkout se mexeu em pagamento — não home + catálogo “por garantia”.</li>
+      <li>Critério: cobertura da superfície alterada + vizinhos de alto acoplamento. Tempo alvo: 15–35 minutos paralelizados.</li>
+    </ul>
+
+    <h3>Camada 3 — cara e seletiva</h3>
+    <ul>
+      <li>Performance da jornada crítica, farm mobile ampla, eval de modelo, chaos pontual, regressão E2E completa.</li>
+      <li>Disparo: merge em main, release candidate, mudança de arquitetura, evento de pico, ou alteração em módulo marcado como <strong>irreversível</strong> (pagamento, PII, deploy path).</li>
+      <li>Critério: comparação com baseline + limiar de risco, não “passou tudo”. Tempo: o que o negócio aceita pagar; documentado, não surpresa.</li>
+    </ul>
+
+    <p>A decisão de subir de camada não é “quanto código mudou”. É <strong>onde o blast radius aponta</strong>. Diff de 3 linhas no orquestrador de pagamento sobe mais rápido que 800 linhas em página estática.</p>
+
+    <h2>Limiares baseados em risco, não em número mágico</h2>
+
+    <p>Cobertura percentual como gate único é o anti-padrão mais caro que já vi sobreviver em dashboard. Desenhei limiares a partir de três fontes: histórico de incidente (90 dias), classificação de fluxo irreversível, e custo de detectar cedo versus em produção.</p>
+
+    <ol>
+      <li><strong>Espelhar incidente.</strong> Se latência em checkout dominou o postmortem, o gate de p99 na jornada de checkout vale mais que asserts cosméticos na home. Se contrato entre serviço A e B quebrou duas vezes, Pact nesses contratos é obrigatório na camada 2 — não “nice to have”.</li>
+      <li><strong>Janela, não eternidade.</strong> Limiar de falha flaky, de cobertura crítica e de regressão de perf tem validade (ex.: 30–60 dias). Revisar mensalmente evita gate mumificado que ainda bloqueia por regra inventada no ano passado.</li>
+      <li><strong>Severidade ≠ bloquear.</strong> Warning com dono e prazo é válido para dívida conhecida. Bloqueio é para risco que produção não absorve bem: pagamento, corrupção de dado, auth quebrada, deploy sem rollback testado.</li>
+      <li><strong>Tendência antes do absoluto.</strong> Em perf e em flake rate, a regressão relativa ao baseline da mesma jornada importa mais que um número absoluto copiado de blog.</li>
+    </ol>
+
+    <h3>Seleção dinâmica de testes</h3>
+    <p>Padronizei seleção por combinação de sinais, nessa ordem de prioridade:</p>
+    <ul>
+      <li><strong>Path / ownership map:</strong> pasta → serviço → tags de teste. Simples, auditável, suficiente para 70% dos PRs.</li>
+      <li><strong>Grafo de dependência:</strong> mudança em lib compartilhada expande o raio. Se o grafo não existe, começo pelo inventário das libs que já causaram incidente em cascata.</li>
+      <li><strong>Tags de risco no teste:</strong> <code>@smoke</code>, <code>@checkout</code>, <code>@pii</code>, <code>@release</code>. Tag sem dono apodrece — cada tag precisa de critério de entrada e saída.</li>
+      <li><strong>Histórico de falha:</strong> testes que falharam nas últimas N builds do mesmo módulo sobem juntos. Cuidado: isso amplifica flake se a quarentena estiver frouxa.</li>
+    </ul>
+
+    <p>Pact e smoke não competem com regressão completa — ocupam nichos diferentes. Smoke responde “a orquestração básica ainda sobe?”. Pact responde “a expectativa entre serviços ainda bate?”. Regressão completa responde “o inventário conhecido de regressão ainda segura?”. Rodar os três em todo commit é pagar preço de regressão completa para obter sinal de smoke.</p>
+
+    <h2>Playbook de implementação</h2>
+
+    <h3>Sequência que uso para introduzir ou reformar gates</h3>
+    <ol>
+      <li><strong>Inventário de dor (1 semana).</strong> Tempo médio de pipeline, % de falhas que não geram correção, top 10 causas de bloqueio, incidentes que o gate atual não teria pegado.</li>
+      <li><strong>Classificar superfícies.</strong> Irreversível / alto / médio / baixo. Só irreversível e alto merecem camada 3 automática.</li>
+      <li><strong>Congelar a camada 1.</strong> Orçamento de tempo, lista mínima, meta de flake. Nada entra na camada 1 sem provar determinismo.</li>
+      <li><strong>Mapear seleção da camada 2.</strong> Começar com path → tag. Só depois investir em grafo sofisticado.</li>
+      <li><strong>Definir bypass antes do primeiro bloqueio político.</strong> Hotfix sem escape hatch oficial vira escape hatch informal. Prefiro processo feio e auditado a atalho silencioso.</li>
+      <li><strong>Instrumentar a falha.</strong> Todo job que pode falhar o merge publica: log, relatório, baseline, comando de reprodução, dono sugerido (CODEOWNERS ou map de serviço).</li>
+      <li><strong>Revisão mensal.</strong> O que bloqueou de verdade, o que só atrasou, o que deveria ter bloqueado e não bloqueou.</li>
+    </ol>
+
+    <h3>Métricas que importam</h3>
+    <ul>
+      <li><strong>Time-to-signal:</strong> mediana até o primeiro sinal acionável no PR.</li>
+      <li><strong>Precision do gate:</strong> % de falhas que geraram correção ou decisão explícita de risco (não “rerun e passou”).</li>
+      <li><strong>Escape rate:</strong> defeitos em produção na superfície que o gate deveria cobrir.</li>
+      <li><strong>Bypass rate e idade média do bypass:</strong> bypass sem revisão vira política permanente disfarçada.</li>
+      <li><strong>Custo de espera:</strong> minutos de engenharia × frequência. Se sobe e o escape rate não cai, a camada está mal calibrada.</li>
+    </ul>
+
+    <h3>Como explicar falha com artefato</h3>
+    <p>Defini um contrato mínimo para qualquer job bloqueante:</p>
+    <ul>
+      <li>Sumário em linguagem de impacto (“checkout smoke falhou no passo pagamento — cartão sandbox recusou / timeout 30s”).</li>
+      <li>Link para relatório (HTML, Allure, k6 summary, Pact broker diff).</li>
+      <li>Baseline ou run de referência quando a decisão depende de regressão.</li>
+      <li>Artefatos de reprodução: trace_id, vídeo/screenshot no E2E, request/response no contrato, seed de dado.</li>
+      <li>Próximo passo sugerido: “reproduzir local com X”, “abrir com time Y”, “é candidato a bypass se hotfix de segurança Z”.</li>
+    </ul>
+
+    <p>Sem isso, a reunião vira achismo. Com isso, a discussão é risco versus tempo — e isso é engenharia.</p>
+
+    <h3>Bypass auditado</h3>
+    <p>Bypass não é fraqueza do processo; é reconhecimento de que risco zero não existe sob pressão real. O desenho que uso:</p>
+    <ul>
+      <li>Motivo tipado: hotfix de segurança, incidente em andamento, falso positivo conhecido com ticket, janela comercial com aceite explícito.</li>
+      <li>Escopo: job ou tag, nunca “desligar qualidade”.</li>
+      <li>Expiração automática (24–72h) + obrigação de follow-up no próximo dia útil.</li>
+      <li>Registro imutável: quem, quando, o quê, link do incidente/PR.</li>
+      <li>Revisão na gate review mensal: bypass recorrente no mesmo job = o limiar ou o teste está errado.</li>
+    </ul>
+
+    <h2>Anti-padrões</h2>
+    <ul>
+      <li><strong>Gate único monólito.</strong> Tudo ou nada no fim. Feedback tarde, custo alto, precisão baixa.</li>
+      <li><strong>Cobertura como meta de área.</strong> Time infla teste raso para passar número. Escape rate não se move.</li>
+      <li><strong>“Quebrou, roda de novo”.</strong> Rerun sem classificação institucionaliza flake e destrói confiança.</li>
+      <li><strong>Regressão completa em todo PR “por segurança”.</strong> Segurança falsa: o time aprende a ignorar ou a empilhar mudanças maiores.</li>
+      <li><strong>Bypass no Slack sem rastro.</strong> Quando o auditor (ou o pós-incidente) pergunta, ninguém reconstrói a decisão.</li>
+      <li><strong>Falha sem artefato.</strong> “Build failed” é insulto ao tempo de quem precisa agir.</li>
+      <li><strong>Limiar eterno.</strong> Número definido num workshop e nunca confrontado com incidente real.</li>
+      <li><strong>Gate como poder de área.</strong> Se o objetivo for provar autoridade, o desenho otimiza bloqueio, não redução de risco.</li>
+    </ul>
+
+    <h2>O que eu colocaria em produção na segunda</h2>
+    <ol>
+      <li>Publicar a tabela das três camadas com orçamento de tempo e critério de disparo — uma página, sem slides.</li>
+      <li>Marcar no mapa de serviços o que é irreversível (pagamento, PII, path de deploy) e amarrar esses módulos à camada 2/3 obrigatória.</li>
+      <li>Implementar seleção por path → tag nos dois repositórios que mais geram fila no CI.</li>
+      <li>Exigir artefato mínimo (relatório + sumário de impacto) em todo job bloqueante; falha sem artefato conta como falha de plataforma, não só de teste.</li>
+      <li>Abrir bypass auditado com expiração; proibir mute informal de job.</li>
+      <li>Separar smoke/Pact da regressão completa no pipeline de PR versus main/RC.</li>
+      <li>Agendar gate review mensal de 45 minutos: precision, escape rate, bypasses, limiares a matar ou endurecer.</li>
+      <li>Medir time-to-signal e % de reruns “sem mudança” por 30 dias — baseline antes de qualquer discurso de melhoria.</li>
+    </ol>
+
+    <div class="callout">
+      <p>Se só puder fazer uma coisa na segunda: tire a regressão cara do PR e coloque seleção por risco com falha explicável. O resto do sistema de gates fica mais fácil depois que o time volta a confiar no vermelho.</p>
+    </div>
+
+    <p>Se o vermelho voltou a ser discutido com calma — e não com atalho informal — o gate está fazendo o trabalho. O resto é ajuste de limiar.</p>
+
+    <div class="article__foot">
+      <a href="../index.html#artigos">← Voltar aos artigos</a>
+    </div>
+  </article>
+</body>
+</html>

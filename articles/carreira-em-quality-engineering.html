@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Carreira em Quality Engineering: de execução a decisão técnica — Leandro Lima</title>
+  <meta name="description" content="De execução a decisão técnica em Quality Engineering: ownership de padrões, gates e plataformas; escopo Staff vs executor sênior; influência sem teatro hierárquico; portfólio de evidências e o que parar de fazer." />
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="article.css" />
+</head>
+<body>
+  <header class="top">
+    <a class="top__brand" href="../index.html">Leandro Lima</a>
+    <a href="../index.html#artigos">← Artigos</a>
+  </header>
+  <article class="article">
+    <span class="article__tag">Carreira</span>
+    <h1>Carreira em Quality Engineering: de execução a decisão técnica</h1>
+    <p class="article__meta">Leitura ~12 min · Quality Engineering</p>
+
+    <p>No começo, qualidade é execução: casos, ciclos, bug report, automação local. Depois o jogo muda — padrões, esteira, risco, conversa com arquitetura e produto. A tese: carreira em Quality Engineering escala por alavancagem técnica, não por volume de testes executados. O mesmo esforço passa a mover multi-squad, plataforma e critério de release. Quem fica só no clique sente o teto; quem assume ownership de decisão técnica amplia o escopo sem precisar “mandar” em ninguém.</p>
+    <p>O failure mode de carreira é colecionar ferramentas e cargos no LinkedIn enquanto o negócio continua surpreso em produção. Outro: confundir seniority com ser o gargalo humano de toda validação. Staff que ainda é o único a “dar o ok” não ampliou sistema — ampliou fila.</p>
+
+    <div class="callout">
+      <p>Título varia por empresa. O que não mente é o escopo: tarefa vs padrão, ferramenta vs estratégia, time local vs superfície multi-squad.</p>
+    </div>
+
+    <h2>Framework: de executor a dono de padrão</h2>
+    <p>Uso três níveis de alavanca para localizar onde estou e o que falta:</p>
+    <ol>
+      <li><strong>Execução</strong> — entrega sinal de qualidade em uma fatia (feature, app, API).</li>
+      <li><strong>Sistema</strong> — desenha e mantém o mecanismo (gate, framework, ambiente, eval) que outros usam sem você na sala.</li>
+      <li><strong>Decisão técnica</strong> — define o que é “bom o suficiente” para release, com evidência e trade-off explícito, em superfície ampla.</li>
+    </ol>
+    <p>Senior executor excelente ainda vive majoritariamente no nível 1–2 local. Staff Quality Engineer passa a ser cobrado pelo nível 3: ownership de padrões, gates e plataformas de qualidade que sobrevivem à sua ausência no daily.</p>
+
+    <h3>O que muda no escopo (Staff vs executor sênior)</h3>
+    <ul>
+      <li><strong>Unidade de trabalho</strong> — de “suite da squad” para “política de sinal na organização de engenharia”.</li>
+      <li><strong>Horizonte</strong> — de sprint para trimestres de redução de classe de risco (contrato, perf, AI eval, ambiente).</li>
+      <li><strong>Interface</strong> — de dev da feature para arquitetura, plataforma, SRE, segurança, produto.</li>
+      <li><strong>Sucesso</strong> — de “eu testei” para “o sistema impede a classe de falha sem herói”.</li>
+      <li><strong>Escrita</strong> — ADRs, RFCs de gate, runbooks; menos case solto no Zephyr eterno.</li>
+    </ul>
+
+    <h2>Playbook de ownership sem teatro hierárquico</h2>
+
+    <h3>1. Ownership de padrões, gates e plataformas</h3>
+    <p>Defini “ownership” de forma operacional:</p>
+    <ul>
+      <li><strong>Padrão</strong> — documento curto + exemplo no repo template; versão; dono nomeado; canal de RFC.</li>
+      <li><strong>Gate</strong> — job no CI com limiar, waiver com expiração, métrica de falso positivo.</li>
+      <li><strong>Plataforma</strong> — self-service (ambiente efêmero, farm, lib de teste, broker de contrato) com SLO de adoção e de tempo até sinal.</li>
+    </ul>
+    <p>Se o padrão só existe em slides, não há ownership — há opinião. Se o gate só você entende, há gargalo. Padronizei waivers com prazo e responsável: exceção eterna é padrão paralelo.</p>
+
+    <h3>2. Influência sem hierarquia teatral</h3>
+    <p>Influência sustentável vem de evidência e de reduzir custo dos outros, não de título:</p>
+    <ul>
+      <li>Chegue ao desenho com risco e alternativa, não só com “precisa testar mais”.</li>
+      <li>Mostre diff de métrica (flaky rate, MTTR de teste, incidentes evitados, tempo até sinal).</li>
+      <li>Entregue caminho padrão mais fácil que o atalho (template de PR, lib interna, stack one-command).</li>
+      <li>Faça pair em PR de arquitetura; deixe o gate falar no merge, não o ego no meeting.</li>
+      <li>Ensine o mecanismo; recuse virar aprova-humano permanente.</li>
+    </ul>
+    <p>Veto técnico só é útil com alternativa viável e critério claro. “Não” sem caminho é ruído político.</p>
+
+    <h3>3. Portfólio de evidências</h3>
+    <p>Carreira em QE se prova com artefatos, não com discurso de “garanto qualidade”. O que eu mantenho visível:</p>
+    <ul>
+      <li><strong>Labs / spikes</strong> — repos ou ADRs mostrando decisão (Pact vs e2e, OTel no CI, eval RAG).</li>
+      <li><strong>Métricas antes/depois</strong> — flaky %, duração de pipeline, taxa de rollback, custo por eval.</li>
+      <li><strong>Incidentes prevenidos</strong> — casos em que gate/contrato/perf pegou antes de prod (com link de job).</li>
+      <li><strong>Plataforma adotada</strong> — número de squads no padrão sem suporte manual.</li>
+      <li><strong>Ensinabilidade</strong> — outros abrindo PR no seu framework; você fora do caminho crítico.</li>
+    </ul>
+    <p>Isso alimenta promoção, conversa com hiring e, mais importante, auto-diagnóstico: se o portfólio é só “executei N casos”, o escopo ainda é de executor.</p>
+
+    <h3>4. Conversar com arquitetura e produto</h3>
+    <p>Decisão técnica de qualidade entra cedo: testabilidade, telemetria, contratos, feature flags, dados de teste. Eu levo para o desenho perguntas objetivas — como observamos a golden journey? qual breaking change policy? qual budget de latência? — e volto com gate proposto, não com planilha de 400 casos.</p>
+
+    <h3>5. Como o dia a dia muda na prática</h3>
+    <p>Executor sênior passa a maior parte do tempo em casos, automação da squad e bugs do ciclo. No escopo Staff, a semana típica que desenhei para mim (e que uso como referência de coaching) equilibra:</p>
+    <ul>
+      <li>RFCs/ADRs e revisão de desenho (testabilidade, risco, sinais).</li>
+      <li>Evolução da plataforma de qualidade (gate, farm, lib, eval) com métrica de adoção.</li>
+      <li>Incidente ou quase-incidente: extrair classe de falha e mecanismo preventivo — não só “mais teste manual”.</li>
+      <li>Pairing pontual em squads para implantar o padrão; depois sair.</li>
+      <li>Higiene: matar flaky sistêmico, waiver vencido, telemetria de esteira.</li>
+    </ul>
+    <p>Se 80% do tempo ainda é execução local da mesma squad, o título pode até ter mudado — o escopo não.</p>
+
+    <h3>6. Critério de “bom o suficiente” para release</h3>
+    <p>Decisão técnica é escolher o que bloqueia e o que não bloqueia. Padronizei conversas de release em quatro caixas:</p>
+    <ol>
+      <li><strong>Bloqueia</strong> — risco alto, evidência fraca, sem mitigação (flag, canário, rollback).</li>
+      <li><strong>Mitiga e segue</strong> — risco médio com controle explícito e dono do follow-up.</li>
+      <li><strong>Monitora</strong> — sinal de telemetria/SLI cobre; teste adicional tem ROI baixo.</li>
+      <li><strong>Não é deste release</strong> — dívida registrada com data, não “lembramos depois”.</li>
+    </ol>
+    <p>Quem só executa tende a empurrar tudo para “mais teste”. Quem decide tecnicamente aloca esforço onde o risco residual justifica.</p>
+
+    <h3>7. Construir alavanca em 90 dias</h3>
+    <p>Se você está migrando de execução para decisão, um ciclo curto que funciona:</p>
+    <ol>
+      <li><strong>Dias 1–15</strong> — meça a esteira (tempo até sinal, flaky, falhas de ambiente, incidentes recentes ligados a gap de teste).</li>
+      <li><strong>Dias 16–45</strong> — entregue um mecanismo (não um relatório): gate, contrato crítico, golden journey com trace, eval baseline.</li>
+      <li><strong>Dias 46–75</strong> — coloque 2+ squads usando sem você no caminho crítico; ajuste falso positivo.</li>
+      <li><strong>Dias 76–90</strong> — publique antes/depois; mate ou automatize uma atividade heroica que você ainda fazia.</li>
+    </ol>
+    <p>O artefato do ciclo é sistema + número — não “apoiamos o time com testes”.</p>
+
+    <h2>Anti-padrões de carreira</h2>
+    <ul>
+      <li><strong>Heroísmo de madrugada</strong> — status por incêndio; zero sistema.</li>
+      <li><strong>Coleção de tools no LinkedIn</strong> — Selenium, Cypress, Playwright, K6, Pact… sem problema resolvido.</li>
+      <li><strong>Volume de testes = impacto</strong> — suite gigante, sinal fraco.</li>
+      <li><strong>Ser o aprovador humano</strong> — escala linear; você vira fila.</li>
+      <li><strong>Gate sem waiver policy</strong> — time contorna; padrão morre.</li>
+      <li><strong>Esconder-se em process theatre</strong> — cerimônia de QA que não muda risco.</li>
+      <li><strong>Prometer 20 especialidades</strong> — mobile, web, perf, segurança, AI… tudo superficial.</li>
+    </ul>
+
+    <h2>O que parar de fazer</h2>
+    <ol>
+      <li>Parar de ser o único a rodar a regressão crítica — automatize e distribua ownership do sinal.</li>
+      <li>Parar de reportar bug sem caminho de reprodução e sem telemetria quando ela existe.</li>
+      <li>Parar de aceitar “teste no staging compartilhado” como estratégia de PR se você já tem evidência de contenção.</li>
+      <li>Parar de medir o próprio valor em quantidade de casos ou de comentários em PR.</li>
+      <li>Parar de otimizar suíte por medo (“mais um e2e”) sem classe de risco nova coberta.</li>
+      <li>Parar de tratar capacitação como slide: deixe template e gate ensinarem no fluxo.</li>
+    </ol>
+
+    <h2>Checklist de segunda</h2>
+    <ol>
+      <li>Liste as 3 decisões de release da semana: qual evidência objetiva existia? O que faltou?</li>
+      <li>Identifique 1 gargalo em que só você “dá o ok”; desenhe gate ou checklist automatizável.</li>
+      <li>Atualize o portfólio: 1 métrica antes/depois ou 1 incidente prevenido com link.</li>
+      <li>Escolha 1 padrão informal e transforme em RFC de 1 página + exemplo no repo.</li>
+      <li>Peça feedback a um engenheiro de outra squad: o que da plataforma de qualidade eles usam sem você?</li>
+      <li>Corte ou delegue 1 atividade puramente executora que não ensina o sistema.</li>
+      <li>Agende presença em 1 desenho de arquitetura cedo — com 3 perguntas de testabilidade/risco.</li>
+    </ol>
+
+    <p>Quando alguém me pergunta “como subir de nível em QE”, eu raramente falo de ferramenta. Pergunto: que decisão de release você já consegue tomar sem pedir licença? É aí que o escopo muda — o título só chega depois, se chegar.</p>
+
+    <div class="article__foot">
+      <a href="../index.html#artigos">← Voltar aos artigos</a>
+    </div>
+  </article>
+</body>
+</html>

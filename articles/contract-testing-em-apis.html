@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Contract testing em arquitetura de APIs — Leandro Lima</title>
+  <meta name="description" content="Quando Pact paga a conta e quando desperdiça tempo: contratos consumer-driven, versionamento, posição no CI, APIs multi-squad, monólito vs microsserviços, pairing com e2e e detecção de breaking change." />
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="article.css" />
+</head>
+<body>
+  <header class="top">
+    <a class="top__brand" href="../index.html">Leandro Lima</a>
+    <a href="../index.html#artigos">← Artigos</a>
+  </header>
+  <article class="article">
+    <span class="article__tag">API</span>
+    <h1>Contract testing em arquitetura de APIs</h1>
+    <p class="article__meta">Leitura ~12 min · Quality Engineering</p>
+
+    <p>Contract testing não é “mais uma camada de teste”. É um mecanismo de coordenação entre deploys independentes. A tese é simples: se consumidor e provedor alinharem expectativas em artefato versionado e verificável no CI, você corta a classe de falha que só aparece quando dois times sobem juntos no ambiente compartilhado — e aí o custo já é incidente, hotfix e reunião de culpa.</p>
+    <p>O failure mode clássico é o oposto: inventário de 200 endpoints virando Pact “porque arquitetura pediu”, broker sem dono, contratos desatualizados gerando verde mentiroso, e e2e ainda carregando o peso de validar shape de JSON. Nesse cenário, contract testing não reduz risco — ele adiciona cerimônia e confiança falsa. Eu só introduzo Pact (ou equivalente) quando o custo de integração quebrada supera o custo de manter o contrato.</p>
+
+    <div class="callout">
+      <p>Contrato bom é barato de falhar cedo. Contrato morto é mais perigoso que nenhum contrato: o pipeline mente e o time para de olhar.</p>
+    </div>
+
+    <h2>Framework: quando Pact paga vs quando desperdiça</h2>
+    <p>Defini quatro eixos antes de qualquer spike de ferramenta. Se três ou mais forem fracos, contract testing raramente se paga no curto prazo.</p>
+    <ol>
+      <li><strong>Frequência de deploy independente</strong> — provedor e consumidor sobem em pipelines e cadências diferentes.</li>
+      <li><strong>Número de consumidores</strong> — um provedor com N clientes internos (web, mobile, BFF, batch) multiplica combinações.</li>
+      <li><strong>Custo do ambiente integrado</strong> — staging compartilhado lento, flaky ou disputado por squads.</li>
+      <li><strong>Taxa histórica de breaking change silenciosa</strong> — campos removidos, enums novos, nullability alterada sem aviso.</li>
+    </ol>
+    <p>Em monólito com um pipeline e um time dono da API, o retorno cai. O contrato ainda pode valer entre módulos internos se houver fronteiras claras e times distintos — mas o broker e o ritual de consumer-driven costumam ser overkill. Em microsserviços multi-squad, o mesmo ritual vira rede de segurança: o provedor não precisa “adivinhar” quem consome o quê.</p>
+
+    <h3>Consumer-driven: quem define a verdade</h3>
+    <p>No modelo CDC, o consumidor publica o que precisa (request/response mínimos), o provedor verifica se ainda cumpre. Isso inverte o anti-padrão de OpenAPI “documento-morre-no-Confluence”. Padronizei: o contrato descreve o que o consumidor <em>usa</em>, não o catálogo completo do provedor. Campos extras no provedor são irrelevantes até alguém passar a depender deles.</p>
+    <ul>
+      <li><strong>Consumidor</strong> gera e publica o pacto (CI do app/BFF).</li>
+      <li><strong>Broker</strong> versiona, associa tags (branch, ambiente, versão de app) e notifica.</li>
+      <li><strong>Provedor</strong> verifica contra os pactos dos consumidores relevantes (can-i-deploy / verification job).</li>
+    </ul>
+    <p>Sem broker (ou equivalente com tags e pending pacts), você volta ao “compartilhar JSON no Slack”. Sem tags por ambiente, misturam-se expectativas de prod com experimentos de feature branch.</p>
+
+    <h2>Playbook operacional</h2>
+
+    <h3>1. Escopo: jornadas críticas, não inventário</h3>
+    <p>Começo pelas interações que, se quebrarem, param dinheiro ou atendimento: autenticação, criação/consulta de pedido, pagamento, webhooks de status. Cada pacto cobre um fluxo com dados mínimos e asserts em campos que o consumidor realmente lê. Evito “golden response” gigante: quanto mais o contrato espelha o payload inteiro, mais frágil fica a verificação a cada campo cosmético.</p>
+
+    <h3>2. Versionamento e evolução</h3>
+    <p>Trato contrato como API pública interna. Regras que desenhei:</p>
+    <ul>
+      <li><strong>Aditivo é barato</strong> — campo novo opcional no provedor não quebra consumidor antigo.</li>
+      <li><strong>Remoção/renomeação/nullability</strong> exigem dual-run: provedor mantém comportamento antigo até consumidores migrarem e republisharem pactos.</li>
+      <li><strong>Tags</strong> por versão de app (semver ou build) e por ambiente (test, staging, prod).</li>
+      <li><strong>Pact pending</strong> no provedor para branches de feature: falha informativa, não bloqueio cego de main.</li>
+    </ul>
+    <p>Breaking change detection é o job do provedor verificando pactos dos consumidores de produção (ou das tags que representam “o que está no ar”). Se o provedor muda e a verificação falha, o deploy para — antes do e2e, antes do incidente.</p>
+
+    <h3>3. Posição no CI</h3>
+    <p>Coloco contract testing <em>depois</em> de unit/component do serviço e <em>antes</em> de e2e caros:</p>
+    <ol>
+      <li>Consumidor: gera pacto → publica no broker (mesmo job do build do cliente).</li>
+      <li>Provedor: sobe app (container leve) → verification contra pactos tagged → can-i-deploy.</li>
+      <li>E2E: só jornadas que precisam de UI, tempo, side effects ou orquestração multi-sistema que contrato não cobre.</li>
+    </ol>
+    <p>Se o verification do provedor só roda “quando der” no staging, você perdeu o valor. O gate precisa estar no pipeline do provedor, com credenciais e seed mínimos para autenticar as interações do pacto.</p>
+
+    <h3>4. Multi-squad e ownership</h3>
+    <p>Cada pacto tem dono: o time consumidor. O provedor é responsável por não quebrar os pactos published das tags de produção. Padronizei um runbook curto: quem republica, quem remove tag stale, quem decide dual-write em mudança breaking. Sem isso, o broker vira lixeira de JSON.</p>
+
+    <h3>5. Monólito vs microsserviços</h3>
+    <ul>
+      <li><strong>Monólito / modular monolito</strong> — prefiro testes de componente na fronteira do módulo + schema checks (OpenAPI/AsyncAPI) se deploy é único. Pact entre módulos só se times e releases forem de fato independentes.</li>
+      <li><strong>Microsserviços</strong> — CDC + broker + can-i-deploy. E2E enxuto nas jornadas de negócio; contrato carrega o shape e a semântica HTTP/mensagem.</li>
+      <li><strong>BFF</strong> — consumidor típico de vários backends: contratos do BFF com cada API upstream evitam o “BFF queou e ninguém sabe qual serviço”. O BFF também gera pactos como provedor para web/mobile.</li>
+    </ul>
+
+    <h3>6. Pairing com e2e</h3>
+    <p>Contrato não substitui e2e. Substitui e2e usado como validador de JSON e status code entre serviços. Divisão que uso:</p>
+    <ul>
+      <li><strong>Contrato</strong> — status, headers relevantes, shape, tipos, enums, campos obrigatórios usados pelo consumidor.</li>
+      <li><strong>E2E</strong> — orquestração de UI, cookies/sessão, side effects (e-mail, fila, ledger), timing, permissões cross-cutting.</li>
+    </ul>
+    <p>Quando um e2e falha por campo renomeado no JSON, isso é regressão que deveria ter morrido no verification do provedor. Movo o assert para o pacto e enxugo o e2e. Meta prática: se mais de ~30% das falhas de e2e na semana são shape/status entre serviços, a pirâmide está invertida — invista em contrato antes de mais browser tests.</p>
+
+    <h3>7. Detecção de breaking change no fluxo real</h3>
+    <p>Breaking change detection só funciona se o provedor souber <em>quais</em> consumidores importam. Fluxo que desenhei:</p>
+    <ol>
+      <li>Consumidores de produção republicam pactos a cada release (tag <code>prod</code> ou versão semver do app).</li>
+      <li>No PR do provedor, verification roda contra tags de produção + tags de staging dos consumidores ativos.</li>
+      <li><code>can-i-deploy</code> consulta o broker: “esta versão do provedor é compatível com os consumidores que estão no ar?”</li>
+      <li>Se incompatível: ou o provedor mantém dual behaviour, ou o consumidor migra e republica antes do deploy do provedor.</li>
+    </ol>
+    <p>Mudanças tipicamente breaking que o time subestima: tornar campo obrigatório, restringir enum, alterar formato de data, mudar código de erro semântico (ex.: 404→400), paginação que deixa de devolver item na mesma página. Schema visualmente “parecido” ainda quebra o cliente.</p>
+
+    <h3>8. Mensageria e webhooks</h3>
+    <p>HTTP não é o único contrato. Eventos (Kafka, SQS, Pub/Sub) e webhooks quebram com a mesma classe de erro — e o e2e costuma ser pior ainda para pegar shape de mensagem. Trato message pact / async contract com as mesmas regras: consumidor declara o que lê da mensagem; provedor verifica no publish. Webhooks externos: contrato no lado que você controla (payload que você envia ou que você parseia), com versionamento de evento (<code>order.created.v2</code>) em vez de mutar o v1 em silêncio.</p>
+
+    <h3>9. Ambiente de verification do provedor</h3>
+    <p>O verification precisa de app subindo rápido, com auth e dados mínimos para satisfazer os estados pedidos pelos pactos (provider states). Sem provider states claros, o time hardcoda dados e o job fica flaky. Seed determinístico + states nomeados (<code>order exists with status paid</code>) são parte do contrato operacional, não detalhe de implementação.</p>
+
+    <h2>Anti-padrões</h2>
+    <ul>
+      <li><strong>Contrato = cópia do OpenAPI inteiro</strong> — vira snapshot frágil; qualquer campo irrelevante quebra CI.</li>
+      <li><strong>Só consumidor gera, provedor nunca verifica no PR</strong> — teatro de compliance.</li>
+      <li><strong>Pactos de feature branch tagged como prod</strong> — poluição; can-i-deploy passa a mentir.</li>
+      <li><strong>Mocks do consumidor desconectados do pacto</strong> — o teste local passa com mock “amigo”; produção quebra.</li>
+      <li><strong>Ignorar mensageria</strong> — APIs HTTP cobertas, eventos Kafka/SQS sem contrato; o breaking change migra para a fila.</li>
+      <li><strong>Gate sem seed de auth</strong> — verification flaky por 401; time desliga o job.</li>
+      <li><strong>Tratar Pact como substituto de teste de negócio</strong> — contrato verde com regra de domínio errada ainda é bug.</li>
+    </ul>
+
+    <h2>Checklist de segunda</h2>
+    <ol>
+      <li>Liste as 5 interações consumidor↔provedor que causaram incidente ou hotfix nos últimos 90 dias.</li>
+      <li>Para cada uma: existe pacto? Está tagged com a versão em produção? Provedor verifica no PR?</li>
+      <li>Abra o broker: quantos pactos stale (&gt;60 dias sem republicação)? Remova ou reatribua dono.</li>
+      <li>Confirme can-i-deploy (ou equivalente) no pipeline do provedor antes do deploy para staging/prod.</li>
+      <li>Pegue 1 falha recente de e2e por shape/status e mova o assert para contrato; delete o assert duplicado no e2e.</li>
+      <li>Documente em 10 linhas o runbook de breaking change: dual-run, republicação, remoção de campo.</li>
+      <li>Se monólito single-pipeline: pause expansão de Pact; invista em schema + testes de componente na fronteira.</li>
+    </ol>
+
+    <p>Pact não é religião. Em time que troca breaking change por Slack às 18h, contrato bem colocado paga o café. Em monólito calmo com um pipeline só, às vezes o dinheiro rende mais em teste de componente e schema. Escolho pela dor — não pelo slide de arquitetura.</p>
+
+    <div class="article__foot">
+      <a href="../index.html#artigos">← Voltar aos artigos</a>
+    </div>
+  </article>
+</body>
+</html>

@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Farms e ambientes efêmeros: custo vs confiança — Leandro Lima</title>
+  <meta name="description" content="Ambientes compartilhados vs efêmeros: Terraform/K8s, test farms, seed e isolamento de dados, quando shared ainda faz sentido, matemática de custo vs incidente e disciplina de teardown." />
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="article.css" />
+</head>
+<body>
+  <header class="top">
+    <a class="top__brand" href="../index.html">Leandro Lima</a>
+    <a href="../index.html#artigos">← Artigos</a>
+  </header>
+  <article class="article">
+    <span class="article__tag">Plataforma</span>
+    <h1>Farms e ambientes efêmeros: custo vs confiança</h1>
+    <p class="article__meta">Leitura ~12 min · Quality Engineering</p>
+
+    <p>Ambiente eterno compartilhado é fábrica de falso negativo e de falso positivo. Alguém sujou o dado, outra pipeline está no meio do migrate, a versão não é a do PR, o teste “flaky” na verdade é contenda. A tese: ambientes efêmeros — sobe, testa, derruba — devolvem previsibilidade ao sinal de qualidade. O custo de cloud é explícito; o custo do shared podre é incidente, retrabalho e desconfiança na esteira.</p>
+    <p>O failure mode oposto também existe: efêmero mal desenhado que leva 40 minutos para subir, seed frágil, teardown que esquece PVC/NAT/IP elástico, farm de devices ociosa queimando orçamento. O time desiste e volta a testar “no joelho” no staging sagrado. Plataforma de qualidade ruim não é a que custa — é a que ninguém usa porque o feedback não chega a tempo.</p>
+
+    <div class="callout">
+      <p>Métrica que importa: minutos até sinal confiável no PR. Não quantidade de machines no slide nem “prod-like” no discurso.</p>
+    </div>
+
+    <h2>Framework: shared hell vs ephemeral cost</h2>
+    <p>Defini a escolha de ambiente com quatro variáveis:</p>
+    <ol>
+      <li><strong>Contenção</strong> — quantos times/pipelines batem no mesmo estado ao mesmo tempo.</li>
+      <li><strong>Mutabilidade</strong> — schema, feature flags e dados mudam por PR?</li>
+      <li><strong>Fidelidade necessária</strong> — precisa de dependência real (gateway de pagamento, IdP) ou double basta?</li>
+      <li><strong>TTL do sinal</strong> — quanto tempo o engenheiro espera antes de ignorar a esteira.</li>
+    </ol>
+    <p>Alta contenção + alta mutabilidade → efêmero (ou pelo menos namespace isolado por PR). Baixa contenção + dados caros de produzir + dependências licenciadas → shared controlado pode ser racional. A decisão é econômica, não ideológica.</p>
+
+    <h3>Matemática custo vs incidente</h3>
+    <p>Coloco na mesma planilha:</p>
+    <ul>
+      <li>Custo mensal de stacks efêmeras (compute, DB, egress, devices) × utilização média.</li>
+      <li>Horas-engenheiro/semana perdidas em “staging vermelho por causa dos outros” × custo interno.</li>
+      <li>Incidentes/quarter rastreáveis a “não testamos a combinação certa” × custo médio de incidente.</li>
+    </ul>
+    <p>Quase sempre, com mais de um squad na mesma esteira, isolamento ganha. Quando o número não fecha, o problema costuma ser setup lento — otimize o path efêmero antes de voltar ao shared como solução padrão.</p>
+
+    <h2>Playbook</h2>
+
+    <h3>1. Stack efêmera com Terraform / K8s</h3>
+    <p>Padrão que desenhei para PR/CI:</p>
+    <ul>
+      <li>Namespace (ou projeto) por <code>pr_id</code> / <code>run_id</code> com labels de dono e TTL.</li>
+      <li>Helm/Kustomize da app sob teste + dependências leves (DB, cache, broker) via chart ou containers de composição.</li>
+      <li>Terraform só no que for cloud de verdade (DNS temporário, bucket, fila gerenciada); estado remoto com lock e workspace por PR.</li>
+      <li>Imagens imutáveis tagueadas com git SHA — nunca <code>latest</code>.</li>
+      <li>Health gate: testes só começam após readiness real (não só pod Running).</li>
+    </ul>
+    <p>Se o bootstrap passa de ~10–15 minutos sem necessidade física (migrate enorme, bake de ML), quebre o problema: snapshot de DB, schema pré-migrado, warm pool de nodes, cache de imagem no cluster.</p>
+
+    <h3>2. Seed e isolamento de dados</h3>
+    <ul>
+      <li><strong>Seed idempotente</strong> versionado no repo (fixtures + migrate), aplicado no create do ambiente.</li>
+      <li><strong>Tenant/prefixo por run</strong> — mesmo shared DB só é aceitável com isolamento lógico forte e limpeza garantida.</li>
+      <li><strong>Proibição de PII de prod</strong> no seed de teste; subset sintético ou anonimizado com job auditável.</li>
+      <li><strong>Contratos de limpeza</strong> — delete por label/run_id no teardown; job órfão noturno como rede de segurança.</li>
+    </ul>
+    <p>Dado compartilhado sem dono é a forma mais rápida de voltar ao hell — mesmo em cluster efêmero se o banco for único.</p>
+
+    <h3>3. Test farms (browser, mobile, runners)</h3>
+    <p>Farm só paga se a fila for gerenciada:</p>
+    <ul>
+      <li>Prioridade por risco (main/release &gt; PR; smoke &gt; full suite).</li>
+      <li>Paralelismo com teto de custo e de contenção no SUT.</li>
+      <li>Cache de imagem/emulador; pool warm para devices/browsers quentes.</li>
+      <li>Autoscaling com scale-to-zero fora de horário se o negócio permitir.</li>
+      <li>Métricas: fila wait, ocupação, taxa de erro de infra vs erro de produto.</li>
+    </ul>
+    <p>Farm ociosa é dinheiro queimado. Farm saturada é pipeline mentiroso (timeouts que parecem bug de app). Eu trato farm como produto interno: SLO de espera e budget mensal explícitos.</p>
+
+    <h3>4. Quando shared ainda é OK</h3>
+    <ul>
+      <li>Homologação com parceiro externo que exige URL estável e allowlist de IP.</li>
+      <li>Hardware raro / device farm física limitada — com reserva e calendário, não faroeste.</li>
+      <li>Dados de referência caríssimos de regenerar, com API de reset por tenant e freeze de migrate em janela.</li>
+      <li>Exploratory longo de um único time, sem CI concorrente.</li>
+    </ul>
+    <p>Shared OK tem: dono, janela de mudança, reset documentado, e CI que não depende dele para o sinal de PR (PR usa efêmero; shared é estágio seguinte).</p>
+
+    <h3>5. Disciplina de teardown</h3>
+    <p>Padronizei teardown como parte do contrato do job, não como “best effort”:</p>
+    <ol>
+      <li><code>finally</code> / post-action sempre executa destroy — inclusive em cancelamento.</li>
+      <li>TTL controller no cluster (ex.: namespace sem heartbeat por N horas morre).</li>
+      <li>Janitor diário: lista recursos sem label válida ou com TTL vencido; alerta se custo órfão &gt; limiar.</li>
+      <li>Estado Terraform: workspace PR destruído; unlock de emergência runbookado.</li>
+    </ol>
+    <p>Sem janitor, efêmero vira shared caro e invisível.</p>
+
+    <h3>6. Camadas de fidelidade (não clone cego de prod)</h3>
+    <p>Nem todo PR precisa do grafo inteiro. Desenhei três faixas:</p>
+    <ul>
+      <li><strong>PR slim</strong> — serviço sob mudança + doubles/contratos das dependências; feedback em minutos.</li>
+      <li><strong>PR integrated</strong> — serviço + 2–3 dependências reais críticas no mesmo namespace; para mudanças de fronteira.</li>
+      <li><strong>Nightly / release candidate</strong> — grafo mais largo ou shared controlado; pegar o que o slim não cobre.</li>
+    </ul>
+    <p>“Prod-like” sem estratificar vira setup de uma hora para validar um rename. Fidelidade sobe com o risco da mudança, não com o ego da plataforma.</p>
+
+    <h3>7. Dados: receitas que funcionam</h3>
+    <p>Três padrões que uso conforme o domínio:</p>
+    <ol>
+      <li><strong>Snapshot migrado</strong> — imagem de DB com schema + seed mínimo; clone por PR (rápido se o snapshot for enxuto).</li>
+      <li><strong>Migrate from empty + fixtures</strong> — mais lento no bootstrap, mais honesto com evolução de schema; bom quando migrate é o risco.</li>
+      <li><strong>Factory na API</strong> — testes criam dados via endpoints internos de test support (protegidos); teardown apaga por <code>run_id</code>.</li>
+    </ol>
+    <p>Evito misturar os três no mesmo pipeline sem regra: cada job declara a receita. Mistura gera “funciona na minha farm”.</p>
+
+    <h3>8. Contabilidade semanal da plataforma</h3>
+    <p>Trato custo de ambiente como métrica de qualidade. Toda semana olho:</p>
+    <ul>
+      <li>Custo de compute/DB de namespaces efêmeros vs número de PRs sinalizados.</li>
+      <li>Custo órfão recuperado pelo janitor (se cresce, teardown está furado).</li>
+      <li>% de falhas de CI classificadas como infra/ambiente.</li>
+      <li>Tempo de fila da farm vs SLO.</li>
+    </ul>
+    <p>Se o custo sobe e o tempo até sinal não cai, a plataforma está só engordando. Ajuste paralelismo, TTL, slim vs integrated — não peça mais budget cego.</p>
+
+    <h2>Anti-padrões</h2>
+    <ul>
+      <li><strong>Staging único como gate de PR</strong> — contenção garantida.</li>
+      <li><strong>Efêmero sem TTL</strong> — cloud bill surpresa.</li>
+      <li><strong>Seed manual “pede pro fulano”</strong> — não escala; não é plataforma.</li>
+      <li><strong>Prod dump no teste</strong> — risco legal e flakiness por lixo.</li>
+      <li><strong>Farm sem métrica de fila</strong> — você só descobre saturação quando o release atrasa.</li>
+      <li><strong>Destroy só no happy path</strong> — cancelamento de job deixa sangue no cluster.</li>
+      <li><strong>Prod-like teatral</strong> — clona tudo, inclusive o que não afeta o risco do PR; setup de 1h.</li>
+    </ul>
+
+    <h2>Checklist de segunda</h2>
+    <ol>
+      <li>Meça o p50/p95 de “minutos até primeiro sinal” nos PRs da semana.</li>
+      <li>Conte quantos jobs falharam por ambiente sujo / colisão (não por assert de produto).</li>
+      <li>Liste namespaces/workspaces órfãos &gt;24h; some o custo estimado.</li>
+      <li>Confirme que todo pipeline com create tem teardown em <code>finally</code> + janitor.</li>
+      <li>Separe: o que no shared atual poderia ir para stack PR com seed sintético?</li>
+      <li>Defina SLO de espera da farm e teto de paralelismo; publique no canal de engenharia.</li>
+      <li>Se bootstrap &gt;15 min: abra item de warm pool / snapshot — não peça “paciência” ao time.</li>
+    </ol>
+
+    <h2>Uma conta que eu faço de cabeça</h2>
+    <p>Custo do ambiente ocioso versus custo da última falha “fantasma” que ninguém reproduziu. Quase sempre o shared barato era o item mais caro da planilha — só não estava na linha de cloud.</p>
+
+    <div class="article__foot">
+      <a href="../index.html#artigos">← Voltar aos artigos</a>
+    </div>
+  </article>
+</body>
+</html>
