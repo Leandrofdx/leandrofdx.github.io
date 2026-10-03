@@ -264,63 +264,148 @@
     </section>
 
     <section id="stack" class="band band--dark band--stack">
-      <header class="band__intro reveal">
+      <header class="cinema__intro reveal">
         <h2>Stack.</h2>
+        <p class="cinema__lead">Filtre por frente — passe o cursor nos chips.</p>
       </header>
-      <dl class="stack-list reveal">
-        <div>
-          <dt>Linguagens</dt>
-          <dd>Java · BeanShell · Groovy · Python · JavaScript</dd>
+
+      <div class="stack-filters reveal" role="toolbar" aria-label="Filtrar stack">
+        <button type="button" class="stack-filter is-active" data-stack-filter="all" aria-pressed="true">Tudo</button>
+        <button type="button" class="stack-filter" data-stack-filter="automation" aria-pressed="false">Automação</button>
+        <button type="button" class="stack-filter" data-stack-filter="ai" aria-pressed="false">IA</button>
+        <button type="button" class="stack-filter" data-stack-filter="perf" aria-pressed="false">Performance</button>
+        <button type="button" class="stack-filter" data-stack-filter="cloud" aria-pressed="false">Cloud</button>
+        <button type="button" class="stack-filter" data-stack-filter="quality" aria-pressed="false">Qualidade</button>
+      </div>
+
+      <div class="stack-board reveal" aria-label="Ferramentas e competências">
+        <div class="stack-group" data-stack-group="automation">
+          <h3 class="stack-group__title">Linguagens</h3>
+          <div class="stack-chips">
+            <button type="button" class="stack-chip">Java</button>
+            <button type="button" class="stack-chip">BeanShell</button>
+            <button type="button" class="stack-chip">Groovy</button>
+            <button type="button" class="stack-chip">Python</button>
+            <button type="button" class="stack-chip">JavaScript</button>
+          </div>
         </div>
-        <div>
-          <dt>Web</dt>
-          <dd>Playwright · Cypress · Selenium · Robot Framework</dd>
+        <div class="stack-group" data-stack-group="automation">
+          <h3 class="stack-group__title">Web</h3>
+          <div class="stack-chips">
+            <button type="button" class="stack-chip">Playwright</button>
+            <button type="button" class="stack-chip">Cypress</button>
+            <button type="button" class="stack-chip">Selenium</button>
+            <button type="button" class="stack-chip">Robot Framework</button>
+          </div>
         </div>
-        <div>
-          <dt>Mobile</dt>
-          <dd>Appium · Espresso · XCUITest · BrowserStack</dd>
+        <div class="stack-group" data-stack-group="automation">
+          <h3 class="stack-group__title">Mobile</h3>
+          <div class="stack-chips">
+            <button type="button" class="stack-chip">Appium</button>
+            <button type="button" class="stack-chip">Espresso</button>
+            <button type="button" class="stack-chip">XCUITest</button>
+            <button type="button" class="stack-chip">BrowserStack</button>
+          </div>
         </div>
-        <div>
-          <dt>API</dt>
-          <dd>RestAssured · Karate · Requests · Postman · Pact</dd>
+        <div class="stack-group" data-stack-group="automation">
+          <h3 class="stack-group__title">API</h3>
+          <div class="stack-chips">
+            <button type="button" class="stack-chip">RestAssured</button>
+            <button type="button" class="stack-chip">Karate</button>
+            <button type="button" class="stack-chip">Requests</button>
+            <button type="button" class="stack-chip">Postman</button>
+            <button type="button" class="stack-chip">Pact</button>
+          </div>
         </div>
-        <div>
-          <dt>Frameworks</dt>
-          <dd>Pytest · JUnit · TestNG · Cucumber · Allure</dd>
+        <div class="stack-group" data-stack-group="automation">
+          <h3 class="stack-group__title">Frameworks</h3>
+          <div class="stack-chips">
+            <button type="button" class="stack-chip">Pytest</button>
+            <button type="button" class="stack-chip">JUnit</button>
+            <button type="button" class="stack-chip">TestNG</button>
+            <button type="button" class="stack-chip">Cucumber</button>
+            <button type="button" class="stack-chip">Allure</button>
+          </div>
         </div>
-        <div>
-          <dt>Acessibilidade</dt>
-          <dd>WCAG 2.2 · axe-core · NVDA · VoiceOver · ARIA</dd>
+        <div class="stack-group" data-stack-group="ai">
+          <h3 class="stack-group__title">IA</h3>
+          <div class="stack-chips">
+            <button type="button" class="stack-chip">Agentes</button>
+            <button type="button" class="stack-chip">Subagentes</button>
+            <button type="button" class="stack-chip">Conversacional</button>
+            <button type="button" class="stack-chip">RAG</button>
+            <button type="button" class="stack-chip">Alucinação</button>
+            <button type="button" class="stack-chip">LLM Evals</button>
+            <button type="button" class="stack-chip">LLM-as-a-judge</button>
+            <button type="button" class="stack-chip">Red team</button>
+          </div>
         </div>
-        <div>
-          <dt>IA</dt>
-          <dd>Agentes · Subagentes · Conversacional · RAG · Alucinação · LLM Evals · LLM-as-a-judge · Red team</dd>
+        <div class="stack-group" data-stack-group="perf">
+          <h3 class="stack-group__title">Performance</h3>
+          <div class="stack-chips">
+            <button type="button" class="stack-chip">k6</button>
+            <button type="button" class="stack-chip">JMeter</button>
+            <button type="button" class="stack-chip">Gatling</button>
+            <button type="button" class="stack-chip">OpenTelemetry</button>
+            <button type="button" class="stack-chip">Grafana</button>
+          </div>
         </div>
-        <div>
-          <dt>Cloud</dt>
-          <dd>AWS · Azure · GCP</dd>
+        <div class="stack-group" data-stack-group="cloud">
+          <h3 class="stack-group__title">Cloud</h3>
+          <div class="stack-chips">
+            <button type="button" class="stack-chip">AWS</button>
+            <button type="button" class="stack-chip">Azure</button>
+            <button type="button" class="stack-chip">GCP</button>
+          </div>
         </div>
-        <div>
-          <dt>Segurança</dt>
-          <dd>LGPD · PII · ISO 27001</dd>
+        <div class="stack-group" data-stack-group="cloud">
+          <h3 class="stack-group__title">CI/CD</h3>
+          <div class="stack-chips">
+            <button type="button" class="stack-chip">GitHub Actions</button>
+            <button type="button" class="stack-chip">Azure DevOps</button>
+            <button type="button" class="stack-chip">Jenkins</button>
+            <button type="button" class="stack-chip">GitLab CI</button>
+          </div>
         </div>
-        <div>
-          <dt>Dados</dt>
-          <dd>PostgreSQL · MongoDB · Kafka · SQL</dd>
+        <div class="stack-group" data-stack-group="cloud">
+          <h3 class="stack-group__title">Plataforma</h3>
+          <div class="stack-chips">
+            <button type="button" class="stack-chip">Kubernetes</button>
+            <button type="button" class="stack-chip">Docker</button>
+            <button type="button" class="stack-chip">Terraform</button>
+            <button type="button" class="stack-chip">Chaos Mesh</button>
+            <button type="button" class="stack-chip">Linux</button>
+            <button type="button" class="stack-chip">Git</button>
+          </div>
         </div>
-        <div>
-          <dt>CI/CD</dt>
-          <dd>GitHub Actions · Azure DevOps · Jenkins · GitLab CI</dd>
+        <div class="stack-group" data-stack-group="quality">
+          <h3 class="stack-group__title">Acessibilidade</h3>
+          <div class="stack-chips">
+            <button type="button" class="stack-chip">WCAG 2.2</button>
+            <button type="button" class="stack-chip">axe-core</button>
+            <button type="button" class="stack-chip">NVDA</button>
+            <button type="button" class="stack-chip">VoiceOver</button>
+            <button type="button" class="stack-chip">ARIA</button>
+          </div>
         </div>
-        <div>
-          <dt>Performance</dt>
-          <dd>k6 · JMeter · Gatling · OpenTelemetry · Grafana</dd>
+        <div class="stack-group" data-stack-group="quality">
+          <h3 class="stack-group__title">Segurança</h3>
+          <div class="stack-chips">
+            <button type="button" class="stack-chip">LGPD</button>
+            <button type="button" class="stack-chip">PII</button>
+            <button type="button" class="stack-chip">ISO 27001</button>
+          </div>
         </div>
-        <div>
-          <dt>Plataforma</dt>
-          <dd>Kubernetes · Docker · Terraform · Chaos Mesh · Linux · Git</dd>
+        <div class="stack-group" data-stack-group="quality">
+          <h3 class="stack-group__title">Dados</h3>
+          <div class="stack-chips">
+            <button type="button" class="stack-chip">PostgreSQL</button>
+            <button type="button" class="stack-chip">MongoDB</button>
+            <button type="button" class="stack-chip">Kafka</button>
+            <button type="button" class="stack-chip">SQL</button>
+          </div>
         </div>
-      </dl>
+      </div>
     </section>
 
     <section id="certificacoes" class="band">
@@ -357,6 +442,7 @@
   <script src="hero-bg.js"></script>
   <script src="carousel.js"></script>
   <script src="atuacao-modal.js"></script>
+  <script src="stack.js"></script>
   <script>
     const els = document.querySelectorAll(".reveal");
     const io = new IntersectionObserver(

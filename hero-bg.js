@@ -11,11 +11,12 @@
   const ctx = canvas.getContext("2d", { alpha: false });
   if (!ctx) return;
 
-  const BLUE = [0, 113, 227];
-  const ICE = [140, 190, 255];
-  const MINT = [180, 210, 255];
-  const DEEP = [30, 70, 160];
-  const WHITE = [245, 245, 247];
+  // Brighter cyan — luminous orbits
+  const BLUE = [6, 182, 212];
+  const ICE = [103, 232, 249];
+  const MINT = [165, 243, 252];
+  const DEEP = [8, 120, 145];
+  const WHITE = [255, 255, 255];
   const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
 
   let w = 0;
@@ -46,15 +47,15 @@
 
   function build() {
     orbs = [
-      { x: 0.16, y: 0.3, r: 0.42, c: BLUE, a: 0.12, sx: 0.05, sy: 0.04, ph: 0.4 },
-      { x: 0.84, y: 0.62, r: 0.46, c: ICE, a: 0.09, sx: -0.04, sy: 0.05, ph: 1.8 },
-      { x: 0.5, y: 0.88, r: 0.36, c: DEEP, a: 0.1, sx: 0.03, sy: -0.03, ph: 3.1 },
+      { x: 0.16, y: 0.3, r: 0.42, c: BLUE, a: 0.22, sx: 0.05, sy: 0.04, ph: 0.4 },
+      { x: 0.84, y: 0.62, r: 0.46, c: ICE, a: 0.18, sx: -0.04, sy: 0.05, ph: 1.8 },
+      { x: 0.5, y: 0.88, r: 0.36, c: MINT, a: 0.16, sx: 0.03, sy: -0.03, ph: 3.1 },
     ];
 
     // Fewer orbits — cleaner stage
     rings = [
-      { rx: 0.48, ry: 0.2, rot: -0.28, speed: 0.09, w: 1.2, a: 0.16, traveler: 0 },
-      { rx: 0.62, ry: 0.28, rot: 0.48, speed: -0.06, w: 1.0, a: 0.11, traveler: 0.55 },
+      { rx: 0.48, ry: 0.2, rot: -0.28, speed: 0.09, w: 1.45, a: 0.28, traveler: 0 },
+      { rx: 0.62, ry: 0.28, rot: 0.48, speed: -0.06, w: 1.2, a: 0.2, traveler: 0.55 },
     ];
 
     const rainN = Math.max(10, Math.min(22, Math.round(w / 55)));
@@ -152,13 +153,13 @@
     // soft band
     ctx.beginPath();
     ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
-    ctx.strokeStyle = rgba(BLUE, ring.a * 0.45);
-    ctx.lineWidth = ring.w * 6;
+    ctx.strokeStyle = rgba(ICE, ring.a * 0.55);
+    ctx.lineWidth = ring.w * 7;
     ctx.stroke();
 
     ctx.beginPath();
     ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
-    ctx.strokeStyle = rgba(ICE, ring.a * 1.15);
+    ctx.strokeStyle = rgba(MINT, ring.a * 1.35);
     ctx.lineWidth = ring.w;
     ctx.stroke();
 
@@ -166,21 +167,22 @@
     const a0 = time * ring.speed * 2.2 + ring.traveler * Math.PI * 2;
     ctx.beginPath();
     ctx.ellipse(0, 0, rx, ry, 0, a0, a0 + 0.55);
-    ctx.strokeStyle = rgba(BLUE, 0.85);
-    ctx.lineWidth = ring.w + 1.4;
+    ctx.strokeStyle = rgba(MINT, 0.95);
+    ctx.lineWidth = ring.w + 1.8;
     ctx.lineCap = "round";
     ctx.stroke();
 
     // traveler bead
     const px = Math.cos(a0 + 0.55) * rx;
     const py = Math.sin(a0 + 0.55) * ry;
-    const glow = ctx.createRadialGradient(px, py, 0, px, py, 26);
-    glow.addColorStop(0, rgba(WHITE, 0.85));
-    glow.addColorStop(0.2, rgba(BLUE, 0.45));
+    const glow = ctx.createRadialGradient(px, py, 0, px, py, 34);
+    glow.addColorStop(0, rgba(WHITE, 0.95));
+    glow.addColorStop(0.15, rgba(MINT, 0.7));
+    glow.addColorStop(0.45, rgba(ICE, 0.35));
     glow.addColorStop(1, rgba(BLUE, 0));
     ctx.fillStyle = glow;
     ctx.beginPath();
-    ctx.arc(px, py, 26, 0, Math.PI * 2);
+    ctx.arc(px, py, 34, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.restore();
@@ -224,7 +226,7 @@
       }
       const r = p.maxR * (0.15 + k * 0.85);
       const a = (1 - k) * 0.35;
-      const col = p.cool ? BLUE : [90, 170, 255];
+      const col = p.cool ? BLUE : ICE;
 
       ctx.beginPath();
       ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
