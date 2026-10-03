@@ -489,6 +489,24 @@ a {
   .flow {
     grid-template-columns: repeat(4, 1fr);
     gap: 1rem;
+    position: relative;
+    padding-bottom: 1.25rem;
+  }
+
+  .flow::after {
+    content: "";
+    position: absolute;
+    left: 8%;
+    right: 8%;
+    bottom: 0;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      rgba(41, 151, 255, 0.08),
+      rgba(41, 151, 255, 0.45),
+      rgba(41, 151, 255, 0.08)
+    );
+    pointer-events: none;
   }
 }
 
