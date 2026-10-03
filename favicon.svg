@@ -1,17 +1,26 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Leandro Lima">
   <defs>
-    <linearGradient id="ll" x1="12" y1="8" x2="52" y2="56" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#3aa0ff"/>
-      <stop offset="100%" stop-color="#0071e3"/>
+    <linearGradient id="bg" x1="14" y1="8" x2="50" y2="56" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#2c2c2e"/>
+      <stop offset="100%" stop-color="#111113"/>
     </linearGradient>
+    <radialGradient id="glow" cx="32" cy="28" r="24" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
   </defs>
-  <rect width="64" height="64" rx="14" fill="url(#ll)"/>
-  <path
-    d="M22 18v28h22"
+  <rect width="64" height="64" rx="16" fill="url(#bg)"/>
+  <rect width="64" height="64" rx="16" fill="url(#glow)"/>
+  <ellipse
+    cx="32"
+    cy="33"
+    rx="18"
+    ry="11"
     fill="none"
     stroke="#ffffff"
-    stroke-width="7"
-    stroke-linecap="round"
-    stroke-linejoin="round"
+    stroke-opacity="0.92"
+    stroke-width="2.4"
+    transform="rotate(-28 32 33)"
   />
+  <circle cx="46" cy="26" r="3.4" fill="#ffffff"/>
 </svg>
