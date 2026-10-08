@@ -11,13 +11,28 @@
   const ctx = canvas.getContext("2d", { alpha: false });
   if (!ctx) return;
 
-  // Brighter cyan — luminous orbits
-  const BLUE = [6, 182, 212];
-  const ICE = [103, 232, 249];
-  const MINT = [165, 243, 252];
-  const DEEP = [8, 120, 145];
   const WHITE = [255, 255, 255];
   const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+
+  const readRgb = (name, fallback) => {
+    const raw = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    if (!raw) return fallback;
+    const parts = raw.split(",").map((n) => Number(n.trim()));
+    return parts.length === 3 && parts.every((n) => Number.isFinite(n)) ? parts : fallback;
+  };
+
+  let BLUE = [6, 182, 212];
+  let ICE = [103, 232, 249];
+  let MINT = [165, 243, 252];
+  let DEEP = [8, 120, 145];
+
+  const syncAccent = () => {
+    BLUE = readRgb("--hero-1", [6, 182, 212]);
+    ICE = readRgb("--hero-2", [103, 232, 249]);
+    MINT = readRgb("--hero-3", [165, 243, 252]);
+    DEEP = readRgb("--hero-4", [8, 120, 145]);
+  };
+  syncAccent();
 
   let w = 0;
   let h = 0;

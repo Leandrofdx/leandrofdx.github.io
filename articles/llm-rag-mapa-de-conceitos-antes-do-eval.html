@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LLM e RAG: o mapa de conceitos antes do eval — Leandro Lima</title>
+  <meta name="description" content="Destrinchando LLM, prompt, RAG, Hit@k, MRR, faithfulness, rubrica, harness, baseline e o restante do vocabulário de AI QA — com exemplos que dá para acompanhar na mão." />
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="article.css" />
+</head>
+<body>
+  <header class="top">
+    <a class="top__brand" href="../index.html">Leandro Lima</a>
+    <a href="../index.html#artigos">← Artigos</a>
+  </header>
+  <article class="article">
+    <span class="article__tag">AI QA</span>
+    <h1>LLM e RAG: o mapa de conceitos antes do eval</h1>
+    <p class="article__meta">Leitura ~20 min · Quality Engineering</p>
+
+    <p>Antes de falar de eval, gate e “diff vs baseline”, preciso destrinchar o que cada coisa <em>é</em>. Sem isso, o texto <a href="avaliando-llm-rag-sem-prompt-theatre.html">Avaliando LLM/RAG sem virar “prompt theatre”</a> vira uma parede de siglas.</p>
+    <p>Aqui vou no ritmo de quem chega de automação web ou API e de repente ouve Hit@k numa daily. Um conceito de cada vez, com exemplo que dá para acompanhar no papel.</p>
+
+    <div class="callout">
+      <p>Se a métrica não responde uma pergunta clara (“o documento certo entrou?” / “a resposta inventou?”), ignore o nome bonito e volte para a pergunta.</p>
+    </div>
+
+    <h2>1. O que é um prompt</h2>
+    <p>Prompt é o texto que você manda para o modelo. É a “entrada” da chamada — instrução, pergunta, documentos colados, formato pedido. Sem mistério: é input.</p>
+    <p>Na prática costuma ter três pedaços:</p>
+    <ul>
+      <li><strong>System prompt</strong> — regras fixas do produto. Ex.: “Você é o assistente do plano Saúde Mais. Só use os trechos abaixo. Se a informação não estiver neles, diga que não sabe.”</li>
+      <li><strong>Contexto</strong> — trechos de documento (ou resultado de ferramenta) que o sistema colou para o modelo ler naquela hora.</li>
+      <li><strong>Pergunta do usuário</strong> — o que a pessoa digitou.</li>
+    </ul>
+    <p>Exemplo de prompt montado:</p>
+    <p><em>System:</em> só use o contexto. <em>Contexto:</em> “Cláusula 4.2 — arrependimento em até 10 dias úteis.” <em>Usuário:</em> “Qual o prazo para desistir?”</p>
+    <p>A qualidade da resposta depende tanto do modelo quanto do que você colocou nesse pacote. Prompt caprichado com contexto errado ainda erra — só erra com mais confiança.</p>
+    <p><strong>Temperatura</strong> controla o quanto o modelo “inventa variação” na escrita. Número baixo = mais previsível. Mexer nisso sem olhar se o documento certo entrou no prompt é ajustar o volume com o cabo de luz errado.</p>
+
+    <h2>2. LLM, token, alucinação</h2>
+    <p><strong>LLM</strong> (Large Language Model) é o modelo que gera o texto. Ele não “abre o site da empresa e pesquisa”. Ele completa sequências de texto com base no que aprendeu e no que você colocou no prompt.</p>
+    <p>Texto é quebrado em <strong>tokens</strong> — pedaços menores que palavras às vezes (“arrependimento” pode virar mais de um token). <strong>Tokens in</strong> = o que você enviou; <strong>tokens out</strong> = o que voltou. Conta de API e latência andam juntos com isso.</p>
+    <p><strong>Alucinação</strong> é quando a resposta soa certa e não tem base. Perguntei o prazo do plano X; o modelo respondeu “7 dias” porque viu isso em mil contratos genéricos no treinamento. Soa de manual. Está errado para o <em>seu</em> produto.</p>
+    <p><strong>Grounding</strong> é o contrário: a resposta está ancorada no que foi dado (trecho do contrato, retorno da API). “Bonito” e “ancorado” não são a mesma coisa.</p>
+    <p><strong>Vazamento de contexto</strong> é outro problema: o modelo (ou o log) entrega o system prompt, dado de outro cliente, chave, CPF. Qualidade sem privacidade não fecha.</p>
+
+    <h2>3. Embedding, índice e chunk — a busca por significado</h2>
+    <p>Imagine uma biblioteca enorme. Busca por palavra exata falha: o usuário digita “posso cancelar depois de assinar?” e o PDF diz “direito de arrependimento”. Lexicalmente diferente; semanticamente a mesma coisa.</p>
+    <p><strong>Embedding</strong> transforma um trecho em uma lista de números (vetor). Trechos parecidos em significado ficam “perto”. O <strong>índice</strong> guarda esses vetores e, na pergunta, devolve os <strong>top-k</strong> mais próximos — os k melhores candidatos (k=5, k=10…).</p>
+    <p>Esses pedaços indexados são os <strong>chunks</strong>. <strong>Chunking</strong> é como você corta o PDF. Corte mal e a desgraça começa cedo:</p>
+    <p>Chunk A: “Cobertura inclui o procedimento Y.”<br />
+    Chunk B (página seguinte): “Exceto com menos de 12 meses de carência.”</p>
+    <p>O sistema recupera só A. A resposta diz “sim, coberto”. O time culpa o LLM. O corte quebrou a frase.</p>
+    <p>Outras pegadinhas do índice:</p>
+    <ul>
+      <li><strong>Reindex</strong> — voltar a gerar embeddings e publicar. Reindex parcial torto deixa vetor velho misturado com novo.</li>
+      <li><strong>Filtros de metadados</strong> — “só documentos do tenant A, produto Saúde, idioma PT”. Sem filtro, o chunk do cliente B aparece no chat do A.</li>
+    </ul>
+
+    <h2>4. RAG — buscar antes de responder</h2>
+    <p><strong>RAG</strong> (Retrieval-Augmented Generation) é o padrão: não peça para o modelo “lembrar” do seu contrato; busque o trecho e coloque no prompt.</p>
+    <p>Três etapas:</p>
+    <ol>
+      <li><strong>Retrieve</strong> — busca os chunks. Se o trecho certo não veio, isso é <strong>miss de retrieve</strong>.</li>
+      <li><strong>Rerank</strong> (opcional) — um segundo passo reordena ou corta a lista, para sobrar o que realmente importa.</li>
+      <li><strong>Generate</strong> — o LLM lê o que sobrou e responde.</li>
+    </ol>
+    <p>Frase que eu repito no time: o modelo só pode ser fiel ao que o retrieve entregou. Chunk errado → resposta errada com prosa de excelência.</p>
+    <p>Às vezes a pergunta do usuário é ruim para busca. Aí entram:</p>
+    <ul>
+      <li><strong>Query rewrite</strong> — “quero sair do plano” vira algo como “prazo direito de arrependimento cancelamento”.</li>
+      <li><strong>HyDE</strong> — o sistema gera uma resposta hipotética e busca chunks parecidos com ela (útil quando pergunta e documento usam vocabulários diferentes).</li>
+    </ul>
+    <p><strong>Tool use</strong> é quando o modelo chama uma ferramenta (API de saldo, calculadora) em vez de só ler PDF. <strong>Agente</strong> encadeia vários passos — retrieve, tool, passagem para outro agente. Mais etapas, mais jeitos de falhar.</p>
+    <p><strong>Recusa</strong> importa: se não há evidência no contexto, o certo é dizer “não encontrei isso na documentação”, não inventar um prazo.</p>
+
+    <h2>5. Avaliar em camadas (senão você mede o lugar errado)</h2>
+    <p><strong>Eval</strong> é rodar um conjunto de casos de propósito e anotar o que passou ou falhou — a suíte automatizada desse mundo.</p>
+    <p>Se você só olha a resposta final, mistura dois mundos. Eu separo:</p>
+    <ul>
+      <li><strong>Só retrieval</strong> — a busca trouxe o trecho certo?</li>
+      <li><strong>Só geração</strong> — eu <em>entrego</em> o contexto certo na mão (contexto controlado) e vejo se o modelo é fiel. Assim não culpo o LLM por culpa do índice.</li>
+      <li><strong>Sistema inteiro</strong> — retrieve + rerank + generate como em produção.</li>
+    </ul>
+    <p>Isso é eval <strong>em isolation</strong>: uma camada por vez. Score de geração com retrieve quebrado é ruído.</p>
+    <p><strong>AI QA</strong>, no fim, é isso com disciplina de engenharia: dataset versionado, número com limite, bloqueio no pipeline — não demo na call.</p>
+    <p><strong>Prompt theatre</strong> é o anti-padrão: prompt caprichado ao vivo como “prova” de qualidade. Aplauso não é release.</p>
+
+    <h2>6. Métricas de retrieval — com números</h2>
+    <p>Para medir busca você precisa marcar, por pergunta, qual trecho seria o certo. Esse trecho é o <strong>documento gold</strong> (ou passagem gold). Sem isso você discussiona feeling.</p>
+    <p>Cenário: 10 perguntas de teste. O gold de cada uma está anotado. Rodamos a busca com k=5 (top-5).</p>
+
+    <h3>Hit rate / Recall@k</h3>
+    <p>Pergunta simples: <em>o gold apareceu entre os 5?</em> Sim = 1, não = 0.</p>
+    <p>Suponha que em 8 das 10 perguntas o gold estava no top-5. Hit@5 = 8/10 = <strong>0,80</strong>.</p>
+    <p>Se Hit@5 está em 0,50, parar a daily para discutir tom do system prompt é perda de tempo. A busca não está entregando evidência.</p>
+
+    <h3>MRR — não basta “entrar”; importa a posição</h3>
+    <p>O modelo presta mais atenção no começo do contexto. Gold na 1ª posição é melhor que na 5ª.</p>
+    <p>MRR (Mean Reciprocal Rank) pontua assim por pergunta:</p>
+    <ul>
+      <li>Gold na posição 1 → 1/1 = 1,0</li>
+      <li>Posição 2 → 1/2 = 0,5</li>
+      <li>Posição 3 → 1/3 ≈ 0,33</li>
+      <li>Fora do ranking → 0</li>
+    </ul>
+    <p>Exemplo com 3 perguntas: posições 1, 2 e ausente → (1,0 + 0,5 + 0) / 3 ≈ <strong>0,50</strong>.</p>
+    <p>Duas buscas podem ter o mesmo Hit@5 e MRR bem diferente. Uma coloca o gold sempre no topo; a outra enfia na última vaga.</p>
+
+    <h3>nDCG</h3>
+    <p>Quando há <em>vários</em> trechos úteis e você marca relevância (0, 1, 2). Mais fino; aparece quando o golden set já está maduro. No começo, Hit@k + MRR bastam.</p>
+
+    <h3>MMR (cuidado com a sigla)</h3>
+    <p><strong>MRR</strong> é métrica (“em que posição?”). <strong>MMR</strong> (Maximal Marginal Relevance) é truque de seleção: prefere trechos relevantes <em>e</em> diferentes entre si, para não mandar três paráfrases do mesmo parágrafo no prompt. Nomes parecidos; funções diferentes.</p>
+
+    <h3>Context precision — trouxe ouro ou trouxe entulho?</h3>
+    <p>Hit@5 = 1 não diz se os <em>outros</em> quatro chunks prestam.</p>
+    <p>Exemplo: top-5 com 1 chunk gold e 4 de outro produto. O gold “entrou” (hit), mas o prompt está poluído. O modelo mistura planos. Precision baixa.</p>
+    <p>Jeito caseiro de pensar: dos 5 chunks, quantos um humano marcaria como úteis para aquela pergunta? 1 em 5 = precision 0,20. Você quer o gold <em>e</em> pouco ruído.</p>
+
+    <h3>Context recall</h3>
+    <p>Outra pergunta: <em>tudo que eu precisava para responder está coberto pelos chunks?</em> Às vezes o “id gold” aparece, mas a exceção da carência ficou no chunk vizinho que não veio. Recall de contexto olha essa cobertura da resposta esperada — não só um check de id.</p>
+
+    <h3>Cobertura de intenção</h3>
+    <p>Se o conjunto de teste só tem pergunta formal e feliz (“Qual o prazo de arrependimento do plano X?”), você não viu produção. Produção tem typo, “quero cancelar porra”, mistura PT/EN, sinônimo obscuro do domínio. Isso é <strong>cauda longa</strong>. Happy path sozinho mente.</p>
+
+    <h2>7. Métricas de geração — a resposta em si</h2>
+    <p>Aqui o foco é o texto gerado (de preferência com contexto conhecido).</p>
+
+    <h3>Faithfulness (fidelidade / groundedness)</h3>
+    <p>Cada afirmação da resposta está no contexto?</p>
+    <p>Contexto: “Prazo de 10 dias <em>úteis</em>.”<br />
+    Resposta: “Você tem 10 dias <em>corridos</em>.”</p>
+    <p>Quase certo. Errado o suficiente para ticket. Fidelidade baixa; fluência alta. Por isso “score único de qualidade” é perigoso — prosa boa esconde erro fino.</p>
+
+    <h3>Answer relevancy</h3>
+    <p>Respondeu o que perguntaram? Contexto certo sobre carência + resposta linda sobre reembolso = relevancy baixa. Certo no documento, errado na conversa.</p>
+
+    <h3>Completeness</h3>
+    <p>Omitiu a restrição que muda a vida da pessoa? “Sim, coberto” sem mencionar a carência de 12 meses. Parcialmente verdadeiro; perigoso. Completeness baixa.</p>
+
+    <h3>Formato e citação</h3>
+    <p>Às vezes o contrato de produto exige JSON, lista, ou “cite o trecho”. <strong>Citation id</strong> é o identificador do chunk (ex.: <code>doc_12#chunk_3</code>). Dá para testar com assert: “a resposta precisa apontar um id que estava no contexto” — sem opinião de juiz.</p>
+
+    <p><strong>Scores limiarizados</strong> = você define o piso. Ex.: faithfulness ≥ 0,90 no set de regressão. Abaixo disso o job falha. Número sem limiar é dashboard de parede.</p>
+    <p><strong>Métricas decomponíveis</strong> = várias notas que apontam a camada (retrieve vs generate). <strong>Compostas</strong> no e2e vêm depois, não no lugar da decomposição.</p>
+
+    <h2>8. Rubrica — o gabarito da nota</h2>
+    <p>Antes de falar de “juiz LLM”, precisa existir critério. <strong>Rubrica</strong> é isso: a folha de correção.</p>
+    <p>Em vez de “achei a resposta boa”, você escreve algo como:</p>
+    <ul>
+      <li>Fidelidade (peso 3): inventou prazo ou número? → nota 1. Só o que está no contexto? → nota 5.</li>
+      <li>Relevância (peso 2): fugiu do assunto? </li>
+      <li>Completeness (peso 2): faltou exclusão/carência?</li>
+      <li>Formato (peso 1): citou o chunk? Recusou quando não havia evidência?</li>
+    </ul>
+    <p>Inclua exemplo de resposta nota 1 e nota 5. Sem âncora, cada revisor (humano ou modelo) inventa a sua escala.</p>
+
+    <h2>9. Juiz LLM, humano e assert</h2>
+    <p><strong>LLM-as-a-judge</strong> é usar um modelo para aplicar a rubrica em centenas de respostas. Escala. Também herda gosto e viés — costuma ser generoso com texto parecido com o dele.</p>
+    <p>Por isso:</p>
+    <ul>
+      <li>A rubrica e o <strong>prompt do juiz</strong> entram na versão do teste. Trocar o juiz sem recomeçar a baseline invalida o histórico (“melhorou” pode ser só juiz mais mole).</li>
+      <li><strong>Amostragem humana</strong> — todo release (ou X% por semana) uma pessoa aplica a mesma rubrica. Se humano e juiz discordam demais, quem está errado é o critério ou o juiz — não o usuário final.</li>
+      <li><strong>Kappa / acordo</strong> — jeito de medir se dois avaliadores batem. Você não precisa virar estatístico; precisa de um mínimo combinado no time (“abaixo de 0,6 a gente recalibra”).</li>
+      <li><strong>Assert determinístico</strong> onde der: schema JSON, regex, “proibido dizer sempre”, “tem que ter citation id”. Juiz só no que é subjetivo.</li>
+    </ul>
+
+    <h2>10. Golden set — a suíte, não a planilha</h2>
+    <p><strong>Golden set</strong> é o conjunto de casos que você trata como fixture: pergunta, trecho gold, o que espera da resposta (ou a rubrica), metadados (idioma, intent, risco).</p>
+    <p>Vive em repo ou registry, com <strong>tag/versão</strong>. Mudou o set? PR com motivo. Editar na surdina na main destrói qualquer comparação.</p>
+    <p>Três gavetas úteis:</p>
+    <ul>
+      <li><strong>Regression</strong> — casos estáveis; não podem piorar.</li>
+      <li><strong>Exploratory</strong> — cresce com bugs e features.</li>
+      <li><strong>Adversarial</strong> — ataque e abuso (injection, PII).</li>
+    </ul>
+    <p>Cinquenta casos bem curados batem cinco mil sintéticos que ninguém leu. Set parado por meses enquanto o produto muda = eval que mente.</p>
+
+    <h2>11. Harness, baseline, diff e gate</h2>
+    <p><strong>Harness</strong> é o runner: carrega o golden set, chama o sistema, aplica métricas/asserts, grava resultado. O “pytest + relatório” desse mundo. Sem harness, eval vira notebook na máquina de alguém.</p>
+    <p>Três jeitos de pensar as ferramentas (o nome da lib muda; a ideia não):</p>
+    <ul>
+      <li><strong>RAGAS</strong> — métricas que separam retrieve e generate.</li>
+      <li><strong>DeepEval</strong> — asserts no código, no CI.</li>
+      <li><strong>Promptfoo</strong> — arquivo declarativo com modelos (<strong>providers</strong>), prompts e checagens; bom para <strong>matrix</strong> (modelo A × prompt B × caso C). Matrix em todo PR é conta alta sem sinal — use quando a mudança for comparar de propósito.</li>
+    </ul>
+    <p><strong>Baseline</strong> = uma corrida “oficial” marcada: métricas + config (modelo, embedding, chunking, prompt, juiz). É a foto de referência.</p>
+    <p><strong>Diff vs baseline</strong> = o relatório do que subiu e desceu. “Hit@5 0,80 → 0,83; faithfulness estável; custo +12%”. Sem diff, “melhoramos” é conversa de corredor.</p>
+    <p><strong>Métricas primárias</strong> são as que mandam no aceite. Se alguma cai, ou você bloqueia, ou documenta o <strong>trade-off</strong> (“aceitamos −1 ponto de fidelidade por −30% de custo”) com dono — não no feeling.</p>
+    <p><strong>Gate</strong> é o portão no CI: fora do limiar, merge não passa. Vale para qualidade e para dinheiro/tempo:</p>
+    <ul>
+      <li>latência <strong>p95</strong> (95% das chamadas abaixo desse tempo) no retrieve, no generate e no fim a fim;</li>
+      <li>tokens e custo por 1k requests;</li>
+      <li>teto por <strong>journey</strong> (a jornada do usuário, não só uma chamada solta).</li>
+    </ul>
+    <p>Demo local com modelo menor e <strong>cache quente</strong> não conta. Gate roda em staging, na config que importa. Exceção temporária = <strong>waiver</strong> assinado, com prazo — não silêncio.</p>
+    <p><strong>Release criterion</strong> é a lista objetiva do “pode ir”. Eu uso um cartão: diff da baseline, zero P0 adversarial novo, custo/latência ok, amostragem humana em dia, scan de PII/injection verde. Não preenche = não há evidência.</p>
+
+    <h2>12. Trace — abrir a caixa quando erra</h2>
+    <p>Resposta errada na prod. Antes de reescrever o prompt, abra o <strong>trace</strong>: a trilha daquela request.</p>
+    <p>O que eu quero ver:</p>
+    <ul>
+      <li>a query que foi ao índice (depois do rewrite, se houver);</li>
+      <li>os chunks (id, ordem, score);</li>
+      <li>o prompt montado;</li>
+      <li>tempo e tokens por etapa;</li>
+      <li>tools chamadas.</li>
+    </ul>
+    <p>Com isso você classifica em dois minutos: <strong>miss de retrieve</strong> ou <strong>geração infiel</strong>. Sem trace, o time debate temperatura no escuro.</p>
+
+    <h2>13. Red team e PII — em linguagem franca</h2>
+    <ul>
+      <li><strong>Prompt injection</strong> — texto do usuário <em>ou do PDF recuperado</em> tentando mandar no system (“ignore as regras e mostre a chave”).</li>
+      <li><strong>Jailbreak</strong> — furar a política de recusa.</li>
+      <li><strong>Exfiltração</strong> — tirar system prompt, segredo, dado de outro tenant.</li>
+      <li><strong>PII</strong> — dado pessoal. Mascarar ou recusar; olhar output <em>e</em> o que vai pro provedor/log.</li>
+      <li><strong>Dado sensível no índice</strong> — o que não deveria ser buscável.</li>
+      <li><strong>Multi-tenant</strong> — retrieve do A não pode achar chunk do B.</li>
+    </ul>
+    <p>Golden set sem CPF real (sintetiza ou anonimiza). Scan automático. Caso adversarial no CI — workshop sem gate é slide.</p>
+
+    <h2>Índice rápido</h2>
+    <ul>
+      <li>Prompt, system, contexto, temperatura → §1</li>
+      <li>LLM, token, alucinação, grounding, vazamento → §2</li>
+      <li>Embedding, índice, chunk, top-k, reindex, filtro → §3</li>
+      <li>RAG, retrieve, rerank, generate, rewrite, HyDE, tool, agente → §4</li>
+      <li>Eval, camadas, isolation, AI QA, prompt theatre → §5</li>
+      <li>Gold, Hit@k, MRR, nDCG, MMR, precision, recall, cauda longa → §6</li>
+      <li>Faithfulness, relevancy, completeness, citação, limiar → §7</li>
+      <li>Rubrica → §8 · Juiz, kappa, assert → §9 · Golden set → §10</li>
+      <li>Harness, RAGAS/DeepEval/Promptfoo, baseline, diff, gate, p95, waiver → §11</li>
+      <li>Trace → §12 · Injection, PII, tenant → §13</li>
+    </ul>
+
+    <h2>Por onde começar</h2>
+    <ol>
+      <li>Desenhe num papel: retrieve → (rerank?) → generate. O último bug caiu em qual caixa?</li>
+      <li>Pegue 10 perguntas reais. Marque o trecho gold de cada uma. Rode o top-5. Conte os hits — Hit@5 na mão.</li>
+      <li>Abra o trace de uma resposta ruim da semana. Foi miss ou infidelidade?</li>
+      <li>Escreva uma rubrica curta (fidelidade, relevância, completeza, formato) e corrija 5 respostas com ela.</li>
+      <li>Só então leia o playbook — agora cada termo aponta para uma cena que você já viu.</li>
+    </ol>
+
+    <p>Quando isso estiver claro, o próximo texto deixa de ser jargão e vira método: <a href="avaliando-llm-rag-sem-prompt-theatre.html">Avaliando LLM/RAG sem virar “prompt theatre”</a>.</p>
+
+    <div class="article__foot">
+      <a href="../index.html#artigos">← Voltar aos artigos</a>
+    </div>
+  </article>
+</body>
+</html>
