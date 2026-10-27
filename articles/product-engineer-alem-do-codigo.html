@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Product Engineer: o cargo de quem não para no merge — Leandro Lima</title>
+  <meta name="description" content="O que é Product Engineer de verdade: dia a dia, ágil, refinamento, estimativa, trade-off de infra e a diferença para Tech Lead. Merge verde não basta se o problema continua." />
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="article.css" />
+  <link rel="stylesheet" href="../covers.css?v=7" />
+</head>
+<body>
+  <header class="top">
+    <a class="top__brand" href="../index.html">Leandro Lima</a>
+    <a href="../index.html#artigos">← Artigos</a>
+  </header>
+  <article class="article">
+    <div class="cover cover--bridge" aria-hidden="true">
+      <span class="cover__n">04</span>
+      <span class="cover__a"></span>
+      <span class="cover__b"></span>
+      <span class="cover__c"></span>
+    </div>
+    <span class="article__tag">Carreira</span>
+    <h1>Product Engineer: o cargo de quem não para no merge</h1>
+    <p class="article__meta">Leitura ~15 min · Product Engineering</p>
+
+    <p>O card dizia: “Botão de exportar CSV no relatório.” Três pontos. Dev abriu o ticket, fez o endpoint, o botão, o PR verde. No dia seguinte o financeiro ligou: o CSV vinha sem o filtro de período que a tela mostrava. Tecnicamente o botão exportava. De produto, a tarefa já estava errada no refinamento.</p>
+    <p>É nesse vão (entre “funcionou no meu ambiente” e “resolveu o problema de quem usa”) que entra o <strong>Product Engineer</strong>. Não é cargo mágico. É um jeito de trabalhar: código com dono de resultado, não só de commit.</p>
+
+    <div class="callout">
+      <p>IA acelera quem digita. Não substitui quem pergunta “para quem é isso?” e “como sabemos que deu certo?”.</p>
+    </div>
+
+    <h2>O que é Product Engineer</h2>
+    <p>Product Engineer é a pessoa de engenharia que carrega três coisas ao mesmo tempo:</p>
+    <ul>
+      <li><strong>Problema:</strong> qual dor do usuário ou do negócio estamos atacando?</li>
+      <li><strong>Solução técnica:</strong> o que construir, e o que <em>não</em> construir agora (incluindo custo de infra e risco de performance).</li>
+      <li><strong>Evidência:</strong> como medimos se melhorou (métrica, suporte, funil, tempo de tarefa).</li>
+    </ul>
+    <p>Diferença prática do “dev que só implementa o ticket”:</p>
+    <ul>
+      <li>Não espera o card perfeito. Ajuda a deixar o card honesto no refinamento.</li>
+      <li>Não some depois do merge. Olha se o uso real bateu com a hipótese.</li>
+      <li>Não trata estimativa como chute de horas de digitação. Estima risco, dependência e aprendizado.</li>
+    </ul>
+    <p>PM ainda define prioridade e narrativa. Design ainda cuida de fluxo e interface. Product Engineer não “vira PM”. Ele encurta a distância entre intenção de produto e o que o sistema realmente entrega.</p>
+
+    <h3>Product Engineer ≠ Tech Lead</h3>
+    <p>Os dois se misturam no organograma e isso gera confusão. A fronteira útil é esta:</p>
+    <ul>
+      <li><strong>Tech Lead</strong> puxa arquitetura, consistência técnica, escalabilidade, padrões do time, dívida estrutural. Pergunta típica: “isso aguenta carga, evolução e manutenção?”</li>
+      <li><strong>Product Engineer</strong> puxa o Product-Market Fit da feature, o corte de escopo, o ciclo de feedback do usuário e o “vale a pena nesta forma?”. Pergunta típica: “isso resolve a dor certa, com evidência, sem inventar trabalho caro demais?”</li>
+    </ul>
+    <p>Um TL forte sem olhar de produto escala a solução errada com elegância. Um Product Engineer sem respeito à arquitetura entrega experimento que vira monstro. Em times maduros os papéis conversam; não competem por status no card.</p>
+
+    <h3>Negócio e infra: o trade-off que também é produto</h3>
+    <p>Product Engineer não para no copy e no funil. Ele também decide (ou disputa) o jeito técnico que afeta custo e experiência.</p>
+    <p>Exemplo: “status do pedido em tempo real.” Dá para abrir WebSocket e fan-out caro na AWS, ou processar assíncrono com atualização a cada 30s e um indicador honesto na UI. Realtime parece mais “produto premium”. Em muitos casos assíncrono reduz conta, evita degradação sob pico e entrega a mesma decisão para o usuário (“saiu para entrega” vs latência de milissegundos que ninguém pediu).</p>
+    <p>Outro: cache agressivo que barateia leitura, mas atrasa o número que o financeiro confia. Aí o trade-off não é “perf vs clean code”. É dinheiro de cloud, risco de suporte e confiança no número. Isso também é decisão de produto, tomada com mão na infra.</p>
+
+    <h2>No dia a dia: três cenas</h2>
+
+    <h3>Cena 1: Slack às 11h</h3>
+    <p><em>Antes:</em> “O filtro de status não está no contrato da API. Subo sem filtro e a gente vê depois.”</p>
+    <p><em>Product Engineer:</em> “Se subir sem filtro, o time de ops vai filtrar na planilha e a gente ‘resolveu’ inventando trabalho para outro time. Ou a gente coloca o filtro agora, ou muda o copy da tela para não prometer filtro. Os dois cabem em meio dia; mentir na UI não cabe.”</p>
+    <p>Impacto: menos surpresa, menos dívida social (“a engenharia sempre entrega incompleto”).</p>
+
+    <h3>Cena 2: Bug “simples”</h3>
+    <p>Card: corrigir label do botão. Dev júnior troca o texto em 10 minutos.</p>
+    <p>Product Engineer pergunta: “Esse label errado está em A/B? Tem analytics no clique? Tem string no app mobile também?” Descobre que o mesmo CTA aparece no e-mail. Escopo muda de 10 minutos para “três superfícies, uma mensagem”.</p>
+    <p>Não é burocracia. É evitar três deploys porque ninguém perguntou onde a frase mora.</p>
+
+    <h3>Cena 3: Feature “pronta”</h3>
+    <p>Feature flag ligada. Zero erro no Sentry. Product Engineer abre o funil: 4% dos usuários elegíveis clicaram; suporte já tem três tickets “não acho o botão”. Código certo, descoberta errada. Próximo passo não é mais endpoint: é posição na tela, onboarding, ou matar a feature.</p>
+    <p>Só gerar código teria marcado “done”. Pensar produto marca “aprendemos que o problema era outro”.</p>
+
+    <h2>O que muda nos ritos ágeis</h2>
+    <p>Ágil sem Product Engineer costuma virar esteira de tickets. Com esse olhar, os mesmos rituais mudam de pergunta.</p>
+
+    <h3>Planning</h3>
+    <p>Em vez de “quantos cards cabem na sprint?”, a mesa pergunta “qual resultado queremos ver na sexta?”.</p>
+    <p>Exemplo: a meta não é “entregar 5 cards de checkout”. É “reduzir abandono na etapa de frete”. Aí dois cards grandes bem escolhidos batem cinco cosméticos. Planning vira escolha, não enchimento de balde.</p>
+
+    <h3>Daily</h3>
+    <p>Menos status de tarefa (“estou no PR”), mais bloqueio de resultado (“API de frete está 800ms; se não cair, a hipótese da sprint não vale”). Daily com Product Engineer escuta sinal de produto e de sistema, não só percentual de board.</p>
+
+    <h3>Review</h3>
+    <p>Demo deixa de ser tour de telas. Mostra o que medimos, o que surpreendeu, o que volta no próximo refinamento. Stakeholder para de aplaudir botão e passa a cobrar evidência.</p>
+
+    <h3>Retrospectiva</h3>
+    <p>Além de “processo”, entra “acertamos o problema?”. Sprint verde com métrica plana cheira a feature theatre (irmão do prompt theatre): aparência de progresso sem movimento real.</p>
+
+    <h2>Refinamento: onde o Product Engineer mais paga o salário</h2>
+    <p><strong>Refinamento</strong> (backlog refinement) é a conversa em que o time deixa o card pronto o suficiente para puxar: objetivo, limites, dúvidas, critérios de pronto. Não é reunião para ler o título em voz alta.</p>
+    <p>É aqui que o modo “só código” sangra dinheiro. Card vago entra na sprint; no meio do caminho todo mundo descobre a regra de negócio; a estimativa morre; a qualidade vira pressa.</p>
+
+    <h3>O que o Product Engineer faz no refinamento</h3>
+    <ul>
+      <li><strong>Traduz desejo em comportamento.</strong> “Melhorar busca” vira “usuário com typo de 1 letra ainda acha o produto em até 2 segundos na home”.</li>
+      <li><strong>Marca o fora de escopo em voz alta.</strong> “Não vamos fazer export Excel neste ciclo. CSV e ponto. Se PM precisar de Excel, vira outro card.”</li>
+      <li><strong>Puxa dependência cedo.</strong> Legal, dados, outro time, feature flag, migração, custo de infra. Surpresa na quarta-feira é falha de refinamento, não azar.</li>
+      <li><strong>Escreve critério de pronto testável.</strong> Não “ficou legal”. Sim: “com filtro de período X–Y o CSV tem as N colunas e a mesma contagem da tabela na tela”.</li>
+      <li><strong>Decide o menor corte que ainda prova a hipótese.</strong> Às vezes o card inteiro é um experimento de meia sprint, não um monólito de três semanas.</li>
+      <li><strong>Explicitar trade-off técnico/financeiro.</strong> Realtime vs job assíncrono, busca síncrona vs fila, precision alta vs conta de LLM: o custo entra no card, não só no relatório da cloud no mês seguinte.</li>
+    </ul>
+
+    <h3>Cena de refinamento</h3>
+    <p>PM: “Precisamos de notificação quando o pedido atrasar.”</p>
+    <p>Dev clássico: “Beleza, endpoint + push. 5 pontos.”</p>
+    <p>Product Engineer: “Atrasar quanto? Em relação a quê? Todo canal ou só app? Usuário já reclama no WhatsApp da loja; notificação duplicada piora. Proposta: só e-mail na primeira versão, atraso &gt; 24h após previsão, e um evento de analytics. Se abrir &lt; 10%, a gente nem faz push.”</p>
+    <p>O card saiu menor, mais barato e com critério de matar. Isso é refinamento com dono de resultado.</p>
+
+    <div class="callout">
+      <p>Card mal refinado vira estimativa mentirosa. Estimativa mentirosa vira sprint nervosa. Sprint nervosa vira atalho de qualidade.</p>
+    </div>
+
+    <h2>Como estimar pensando como Product Engineer</h2>
+    <p>Estimativa clássica pergunta: “Quanto tempo para codar isso?”</p>
+    <p>Estimativa de Product Engineer pergunta quatro coisas, e só depois fala em pontos ou dias.</p>
+
+    <h3>1. O que é “feito” de verdade?</h3>
+    <p>Feito = usuário consegue o resultado + telemetria mínima + rollback possível. Se o card não tem isso escrito, você está estimando neblina.</p>
+
+    <h3>2. O que pode quebrar em volta?</h3>
+    <p>Auth, contrato de API, app antigo, relatório, LGPD, fila, conta de cloud. Liste. Cada dependência é tempo ou risco; os dois entram na conta.</p>
+
+    <h3>3. O que a gente ainda não sabe?</h3>
+    <p>Se ninguém sabe se o parceiro de frete devolve o campo X, a primeira fatia não é a tela. É um spike de meio dia. Estimar a feature inteira sem o spike é ficção.</p>
+
+    <h3>4. Qual o menor passo que reduz incerteza?</h3>
+    <p>Em vez de “8 pontos para o módulo completo”, quebre:</p>
+    <ul>
+      <li>Spike do contrato (0,5–1 dia): aprende</li>
+      <li>API + flag desligada (2 dias): seguro</li>
+      <li>UI para 10% da base (2 dias): aprende uso</li>
+      <li>Ajuste ou kill (1 dia): decide</li>
+    </ul>
+    <p>Soma pode até ser parecida com o “8” antigo. A diferença: você tem portas de saída. Product Engineer estima para aprender cedo, não para defender o chute inicial.</p>
+
+    <h3>Exemplo numérico curto</h3>
+    <p>Card: “Upload de comprovante no pedido.”</p>
+    <p>Chute só de código: 3 dias (tela + S3 + thumbnail).</p>
+    <p>Olhar de produto:</p>
+    <ul>
+      <li>Tipos de arquivo aceitos e vírus? (+1 dia ou serviço pronto)</li>
+      <li>Pedido já faturado pode trocar comprovante? (regra de negócio; se não estiver no card, + conversa e talvez +1 dia)</li>
+      <li>App mobile precisa na mesma release? (se sim, +2; se não, escreve fora de escopo)</li>
+      <li>Métrica: % de pedidos com comprovante anexado em 24h</li>
+      <li>Processamento síncrono do arquivo na request vs fila: um barateia e protege p95; o outro “parece instantâneo” e pode derreter sob pico</li>
+    </ul>
+    <p>Estimativa honesta vira “5–6 dias com mobile fora, regra de faturado documentada, antivírus via serviço existente, processamento em fila”. Ou o time descobre no refinamento que mobile é obrigatório e o card não entra nesta sprint. Melhor doer na segunda do que na quinta.</p>
+
+    <h2>Por que essa figura importa agora</h2>
+    <p>Gerar código ficou mais barato. Autocomplete, agentes, templates: a fábrica de sintaxe acelerou. O gargalo migrou para escolher o problema certo, cortar escopo sem matar valor, ligar entrega a sinal (métrica, suporte, receita, risco, custo de infra) e não deixar qualidade e operação como “fase depois”.</p>
+    <p>Time que só premia velocidade de PR vai produzir mais lixo elegante. Time que premia aprendizado e resultado precisa de gente de engenharia que sente o produto: no refinamento, na estimativa, no merge e uma semana depois do release.</p>
+    <p>Para Quality Engineering, o efeito é direto. Product Engineer bem calibrado chega no QA com critério de pronto utilizável, risco nomeado e menos “surpresa de última hora”. Menos teatro de card. Mais conversa de impacto.</p>
+
+    <h2>Quando o título é novo e o hábito é velho</h2>
+    <p>Você reconhece o modo ticket-taker mesmo com “Product Engineer” no LinkedIn: refinamento igual ao de sempre, done igual a merge, estimativa baixa para agradar (qualidade e a fatura da cloud pagam depois), quarenta minutos de reunião sem uma decisão. Outro desvio comum é confundir o papel com Tech Lead e passar a sprint em diagrama enquanto a feature não ganha um ciclo de feedback. Ou o inverso: virar PM sombra, disputar prioridade o tempo todo e não fechar entrega.</p>
+    <p>O mais atual: usar IA para pensar menos. Mais código gerado, mesma cegueira de produto.</p>
+
+    <h2>Se for testar isso na próxima sprint</h2>
+    <p>Não precisa de framework. Precisa de atrito pequeno e cedo.</p>
+    <p>No refinamento, pegue um card e escreva em três linhas: usuário, resultado esperado, fora de escopo. Se não der, o card não está pronto. Na estimativa, fale primeiro o que você <em>não sabe</em>; transforme uma dúvida em spike ou pergunta para PM, e nomeie um trade-off de infra se houver (realtime vs assíncrono, sync vs fila).</p>
+    <p>Peça acesso ao analytics (Mixpanel, Amplitude ou o que a empresa usar) e à fila de suporte (Zendesk, Intercom). Sem isso, “olhar o funil depois” vira slide. Se a política bloquear, peça view read-only e um ritual semanal com quem tem a chave.</p>
+    <p>Depois do release, vinte minutos: funil + cinco tickets reais. A pergunta única é “a hipótese se confirmou?”. No planning, uma frase de resultado da sprint além da lista de cards. Se você é QA/QE, cobre critério de pronto testável no refinamento: mesmo músculo, outro assento.</p>
+
+    <p>Código continua importando. Só que código sem dono de resultado virou commodity. O que sobra é quem une tecla, contexto e consequência.</p>
+
+    <div class="article__foot">
+      <a href="../index.html#artigos">← Voltar aos artigos</a>
+    </div>
+  </article>
+</body>
+</html>
