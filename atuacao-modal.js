@@ -23,15 +23,15 @@
     },
     risk: {
       eyebrow: "02 · Visão de risco",
-      title: "O que testar quando o tempo acaba.",
-      lead: "Cobertura infinita é fantasia. Eu corto pelo impacto: o que quebra receita, confiança e operação — e deixo o cosmético por último.",
+      title: "O que responder quando o PO pergunta se sobe hoje.",
+      lead: "Cobertura infinita é fantasia. Eu corto pelo impacto: o que quebra receita, confiança e operação. Cosmético por último. O que fica de fora tem dono.",
       items: [
-        "Matriz de risco com produto e engenharia — severidade × probabilidade × detectabilidade.",
-        "Prioridade por caminho crítico: login, pagamento, dados sensíveis, release path.",
-        "Sinais de maturidade, incidentes e escapes — o backlog de teste segue a dor, não a checklist.",
-        "Decisão explícita do que não testar agora — com dono e data de revisão.",
+        "Score rápido com produto e engenharia: impacto × probabilidade × detectabilidade.",
+        "Fila preferencial: pagamento, PII, authz, migrate, path de deploy.",
+        "Ritual de 15 minutos no RC: inventário, score, corte no clock, não-testado registrado.",
+        "Trade-off explícito no lugar de “QA aprovou”: protegemos X, aceitamos Y, mitigação Z.",
       ],
-      proof: "Uso visão de risco para enxugar regressão e focar esforço onde o escape custa caro — sem teatro de 100% de cobertura.",
+      proof: "O entregável sob pressão é risco residual com preço e aceite, não teatro de 100% de cobertura.",
     },
     process: {
       eyebrow: "03 · Processo",

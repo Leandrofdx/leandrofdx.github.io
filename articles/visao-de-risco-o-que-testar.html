@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Visão de risco: o que testar quando o tempo acaba — Leandro Lima</title>
-  <meta name="description" content="Modelo prático de risco (impacto × probabilidade × detectabilidade) para priorizar testes, conversar com produto e documentar o que fica de fora sem surpresa." />
+  <title>Visão de risco: o que responder quando o PO pergunta “dá pra subir hoje?” — Leandro Lima</title>
+  <meta name="description" content="Visão de risco: o que responder quando o PO pergunta se sobe hoje. Impacto × probabilidade × detectabilidade, ritual de 15 minutos, o que cortar e o que nunca cortar." />
   <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="article.css" />
   <link rel="stylesheet" href="../covers.css?v=7" />
@@ -22,142 +22,134 @@
       <span class="cover__c"></span>
     </div>
     <span class="article__tag">Risco</span>
-    <h1>Visão de risco: o que testar quando o tempo acaba</h1>
-    <p class="article__meta">Leitura ~12 min · Quality Engineering</p>
+    <h1>Visão de risco: o que responder quando o PO pergunta “dá pra subir hoje?”</h1>
+    <p class="article__meta">Leitura ~16 min · Quality Engineering</p>
 
-    <p>Tempo sempre acaba. A diferença entre qualidade amadora e madura não é a lista do que foi testado — é a lista do que ficou de fora, com o porquê, assinada em linguagem que produto e engenharia entendem. O modo de falha do “testar o máximo possível” é cruel: espalha esforço fino, esgota o clock, e deixa escapar o fluxo irreversível porque a equipe estava validando cosmético na tela secundária.</p>
-
-    <p>Defini priorização como serviço de decisão sob incerteza. Sem modelo, a discussão vira opinião + senioridade + quem fala mais alto na daily. Com modelo, o corte é explícito, auditável e revisável depois do incidente.</p>
+    <p>Quinta, 18h40. Release candidate “só com três PRs”. Suite verde. Dois QAs, quatro horas no clock. Produto pergunta: “dá para subir?”. Sem modelo, a resposta vira feeling: a pessoa mais sênior fala mais alto, o time testa o que é fácil de clicar, e o fluxo de estorno (tocado de leve num dos PRs) fica para “amanhã cedo”.</p>
+    <p>Sexta, 09h12: dinheiro volta errado para 40 pedidos. A suite não mentiu. Ela cobriu o inventário conhecido. O risco novo não estava na suite. O entregável que faltou não era mais teste. Era a lista do que ficou de fora, com preço e dono.</p>
 
     <div class="callout">
-      <p>Risco assumido e documentado é engenharia. Risco escondido porque “não deu tempo” é surpresa para o usuário e para o stakeholder — e surpresa não é estratégia de qualidade.</p>
+      <p>Risco residual documentado é engenharia. “Não deu tempo” sem rastro é surpresa. Surpresa não é estratégia de qualidade.</p>
     </div>
 
-    <h2>Modelo: impacto × probabilidade × detectabilidade</h2>
+    <h2>O que é priorizar por risco</h2>
+    <p><strong>Risk-based testing</strong> é decidir onde gastar o clock sob incerteza. Não é “testar o que assusta o QA”. É ordenar superfície de dano: o que quebra o negócio, o usuário ou a confiança, com que chance nesta mudança, e quão difícil é perceber antes do cliente.</p>
+    <p>Três ideias que eu carrego de frameworks reais, sem virar culto a sigla:</p>
+    <ul>
+      <li><strong>FMEA (Failure Mode and Effects Analysis):</strong> severidade × ocorrência × detecção. Na prática de release eu colapso isso em impacto × probabilidade × detectabilidade, escala 1–5, âncoras em português de produto.</li>
+      <li><strong>Blast radius:</strong> se falhar, quantos usuários, quantos tenants, quanto dinheiro, quanto tempo até rollback? Mudança pequena em caminho quente tem raio grande.</li>
+      <li><strong>Heurísticas de Bach / tours (SFDPOT e variantes):</strong> Structure, Function, Data, Platform, Operations, Time. Não para preencher checklist eterno. Para forçar perguntas quando o exploratório começa a vagar.</li>
+    </ul>
+    <p>Automação responde: “o conhecido ainda passa?”. Priorização por risco responde: “com estas horas, o que não pode escapar?”. Misturar as duas perguntas sem declarar qual é qual gera falso conforto.</p>
 
-    <p>Uso três eixos simples, com escala 1–5 e âncoras concretas. A precisão falsa de planilha com duas casas decimais não ajuda; consistência entre pessoas ajuda.</p>
+    <h2>O modelo na mão: impacto × probabilidade × detectabilidade</h2>
+    <p>Escala 1–5. Sem duas casas decimais. Consistência entre pessoas importa mais que precisão teatral.</p>
 
     <h3>Impacto</h3>
     <ul>
-      <li><strong>5 — irreversível ou gravíssimo:</strong> dinheiro errado, PII vazada/corrompida, deploy sem rollback, perda de confiança regulatória, indisponibilidade longa do core.</li>
-      <li><strong>3 — degradante:</strong> jornada principal prejudicada, workaround possível, custo de suporte alto.</li>
-      <li><strong>1 — cosmético / periferia:</strong> ruído visual, texto, fluxo raro com alternativa óbvia.</li>
+      <li><strong>5:</strong> irreversível ou gravíssimo. Dinheiro errado, PII vazada, deploy sem rollback, indisponibilidade longa do core, efeito regulatório.</li>
+      <li><strong>3:</strong> jornada principal degrada, existe workaround, suporte explode.</li>
+      <li><strong>1:</strong> cosmético, periferia, fluxo raro com alternativa óbvia.</li>
     </ul>
 
-    <h3>Probabilidade (de escapar ou falhar nesta mudança)</h3>
-    <ul>
-      <li>Sobe com: mudança em código quente, integração nova, refator sem caracterização, histórico de incidente, prazo apertado, autor novo no módulo.</li>
-      <li>Desce com: mudança isolada, contratos estáveis, boa cobertura automatizada na superfície, feature flag com kill switch.</li>
-    </ul>
+    <h3>Probabilidade (desta mudança escapar ou falhar)</h3>
+    <p>Sobe com código quente, integração nova, refator sem caracterização, incidente recente no módulo, autor novo na área, prazo esmagando revisão. Desce com mudança isolada, contrato estável, boa cobertura na superfície tocada, feature flag com kill switch testado.</p>
 
-    <h3>Detectabilidade (no sentido de “quão difícil é perceber antes do usuário”)</h3>
-    <ul>
-      <li><strong>Baixa detectabilidade = perigo:</strong> falha silenciosa, dado errado sem alarme, relatório financeiro inconsistente, permissão aberta demais.</li>
-      <li><strong>Alta detectabilidade:</strong> quebra óbvia no smoke, monitoração já alerta, erro visível na UI crítica.</li>
-    </ul>
+    <h3>Detectabilidade (antes do usuário)</h3>
+    <p>Baixa detectabilidade é perigo: falha silenciosa, saldo errado sem alarme, permissão aberta demais, relatório que “bate” visualmente e mente no total. Alta: quebra no smoke, monitoração já alerta, erro gritante na UI crítica.</p>
+    <p>Ordenação: sobe <strong>alto impacto + probabilidade material + baixa detectabilidade</strong>. Empate? Privilegio impacto irreversível. Sempre.</p>
 
-    <p>Ordenação prática: sobe o que é <strong>alto impacto + probabilidade material + baixa detectabilidade</strong>. Desce o cosmético, raro e óbvio no smoke. Quando empatar, privilégio impacto irreversível — sempre.</p>
-
-    <h3>Fluxos irreversíveis: fila preferencial</h3>
-    <p>Independentemente da planilha da sprint, mantenho uma lista curta sempre no topo do radar:</p>
-    <ul>
-      <li>Pagamento, estorno, split, carteira, limites de crédito.</li>
-      <li>PII: export, exclusão (LGPD), mascaramento, logs que não deveriam conter dado.</li>
-      <li>Identidade e sessão: escalonamento de privilégio, reset de senha, tokens.</li>
-      <li>Path de deploy/migração: migration destrutiva, flag kill, rollback.</li>
-      <li>Comunicação com efeito legal/contratual: contrato aceito, consentimento, notificação obrigatória.</li>
-    </ul>
-
-    <p>Esses fluxos não “caem” da lista porque o board está cheio. Se o tempo apertar, corto periferia — não o irreversível.</p>
-
-    <h2>Time-box: ritual de priorização que cabe em 15 minutos</h2>
-
-    <p>Padronizei um ritual curto antes de corte de release, fim de sprint apertado ou incidente paralelo. Participam quem fez a mudança, quem opera, e alguém de produto com poder de aceite de risco. Não é planilha eterna.</p>
-
+    <h3>Exemplo com números (não teoria)</h3>
+    <p>Três mudanças no mesmo RC:</p>
     <ol>
-      <li><strong>O que entrou?</strong> Lista de mudanças (PRs, configs, flags, migrações). Sem inventário, não há priorização — há chute.</li>
-      <li><strong>O que é novo ou quente?</strong> Integrações, módulos com incidente recente, áreas sem dono claro.</li>
-      <li><strong>Onde já falhou?</strong> 90 dias de produção + falhas de pipeline que foram “rerunadas”.</li>
-      <li><strong>Score rápido</strong> nos itens candidatos (impacto × probabilidade × detectabilidade). Discordância é boa — força âncora concreta.</li>
-      <li><strong>Cortar com tempo.</strong> Ex.: 4 horas de exploração → só top N. O N cabe no clock, não no desejo.</li>
-      <li><strong>Registrar o não-testado</strong> com risco residual e condição de aceite (flag off, monitoramento extra, rollback pronto, canary).</li>
+      <li><strong>CSS da home:</strong> impacto 1, prob. 2, detect. fácil (smoke vê). Score baixo. Corta se o clock apertar.</li>
+      <li><strong>Novo campo no export CSV do financeiro:</strong> impacto 5 (decisão de caixa), prob. 3 (tocou query), detect. baixa (número “bonito” errado). Score alto. Entra no top: conferir filtro de período, totais vs tela, amostra de pedidos reais.</li>
+      <li><strong>Timeout do client HTTP de frete:</strong> impacto 4 (checkout), prob. 4 (caminho quente), detect. média (erro aparece, mas só sob lentidão). Score alto: teste de contrato + um cenário de latência injetada ou stub lento, não só happy path a 20ms.</li>
+    </ol>
+    <p>Sem o score, o time gasta a manhã no CSS porque “é rápido de validar”. Com o score, o CSV e o frete comem o clock. O CSS vai de fora com risco residual explícito: “layout em viewport rara; mitigação flag de tema / hotfix”.</p>
+
+    <h2>Fila preferencial: fluxos irreversíveis</h2>
+    <p>Independente da planilha da sprint, mantenho uma lista curta que quase nunca cai:</p>
+    <ul>
+      <li>Pagamento, estorno, split, carteira, limite de crédito.</li>
+      <li>PII: export, exclusão (LGPD), mascaramento, log que não deveria ter dado.</li>
+      <li>Identidade: privilégio, reset de senha, token, sessão.</li>
+      <li>Deploy/migração: migration destrutiva, flag kill, rollback.</li>
+      <li>Efeito legal/contratual: aceite, consentimento, notificação obrigatória.</li>
+    </ul>
+    <p>Se o tempo apertar, corto periferia. Não corto irreversível sem mitigação escrita (flag off, canary, monitor, rollback, dono do aceite).</p>
+
+    <h2>Ritual de 15 minutos (cabe de verdade)</h2>
+    <p>Antes de corte de release, fim de sprint apertado ou incidente paralelo. Quem mudou, quem opera, alguém de produto que pode aceitar risco. Sem isso, você prioriza no escuro.</p>
+    <ol>
+      <li><strong>Inventário:</strong> PRs, configs, flags, migrações. Sem lista, não há priorização. Há chute.</li>
+      <li><strong>Quente/novo:</strong> integração, módulo com incidente nos últimos 90 dias, área sem dono.</li>
+      <li><strong>Histórico:</strong> falhas de prod + jobs “rerunados” no CI (rerun esconde flaky e risco).</li>
+      <li><strong>Score rápido</strong> nos candidatos. Discordância é útil: força âncora (“impacto 5 porque estorno sem idempotência”).</li>
+      <li><strong>Cortar no clock:</strong> 4 horas → top N que cabe. N vem do tempo, não do desejo.</li>
+      <li><strong>Registrar o não-testado:</strong> risco residual, mitigação, dono do aceite.</li>
     </ol>
 
-    <h3>Camadas de resposta ao risco (não só “mais E2E”)</h3>
+    <h3>Diálogo que eu quero ouvir</h3>
+    <p>Ruim: “QA aprovou.”</p>
+    <p>Bom: “Priorizei estorno e o export financeiro. Campanha de banner ficou de fora. Residual: layout quebrado em mobile antigo. Mitigação: flag da campanha e plantão de 2h. Aceite: nome da PM, 18h55.”</p>
+    <p>Isso é linguagem de consequência. Produto entende. Engenharia se compromete. Qualidade estrutura a decisão; não carimba magia.</p>
+
+    <h2>Camadas de resposta (não é “mais E2E”)</h2>
+    <p>Quando o risco sobe, eu escolho a ferramenta pelo tipo de dúvida:</p>
     <ul>
-      <li><strong>Automação de regressão:</strong> risco conhecido e estável.</li>
-      <li><strong>Contrato / API / caracterização:</strong> integração e regra sem custo de UI.</li>
-      <li><strong>Exploratório direcionado:</strong> risco novo, UX em fluxo, bordas mal modeladas.</li>
-      <li><strong>Perf / resiliência pontual:</strong> mudança em caminho quente de latência ou saturação.</li>
-      <li><strong>Observabilidade + canary:</strong> quando detectar em produção controlada é melhor que fingir cobertura total pré-deploy.</li>
-      <li><strong>Checklist de release:</strong> o que deliberadamente não será automatizado nesta janela.</li>
+      <li><strong>Regressão automatizada:</strong> risco conhecido e estável. Suite responde se o inventário antigo ainda passa.</li>
+      <li><strong>Contrato / API / caracterização:</strong> regra e integração sem pagar UI. Pact, OpenAPI diff, testes de caracterização do legado antes do refator.</li>
+      <li><strong>Exploratório com charter:</strong> risco novo, borda mal modelada. Sessão de 60–90 min com missão escrita (“atacar idempotência do estorno com double-submit e retry de rede”), não turismo de tela.</li>
+      <li><strong>Perf / resiliência pontual:</strong> mudança em caminho quente de latência. Um cenário k6 no endpoint tocado bate “vamos rodar a bateria completa amanhã”.</li>
+      <li><strong>Observabilidade + canary:</strong> quando detectar em fatia controlada reduz mais risco do que fingir cobertura total pré-deploy. Exige abort criteria: erro X%, latência p95, negócio Y.</li>
     </ul>
+    <p>Suite verde no conhecido + buraco no novo = release ingênuo. Exploratório sem charter = horas que não se repetem nem se defendem.</p>
 
-    <p>Automação ajuda — não decide. Suite verde cobre o inventário conhecido. Risco novo pede exploração ou contrato. Misturar os dois sem critério é martelo em parafuso.</p>
-
-    <h2>Conversar com produto em linguagem de risco</h2>
-
-    <p>Produto não precisa de jargão de pirâmide de teste. Precisa de consequências. Traduzo assim:</p>
-
+    <h2>Heurística rápida quando sobra uma hora</h2>
+    <p>Uso um cartão mental (inspirado em SFDPOT, enxuto):</p>
     <ul>
-      <li>Em vez de “não deu para testar tudo”: “Priorizei pagamento e PII; a tela de campanha ficou de fora. Risco residual: layout quebrado em viewport X. Mitigação: flag e hotfix em Y horas.”</li>
-      <li>Em vez de “qualidade aprovou”: “Risco residual aceito para estes itens; critérios de abortar canary são estes.”</li>
-      <li>Em vez de “preciso de mais tempo”: “Com mais um dia, desço o risco em integração Z de alto impacto e baixa detectabilidade. Sem isso, seguimos com monitoramento reforçado.”</li>
+      <li><strong>Data:</strong> nulo, zero, duplicado, timezone, arredondamento de dinheiro.</li>
+      <li><strong>Operações:</strong> double-click, retry, refresh no meio do POST, duas abas.</li>
+      <li><strong>Permissão:</strong> usuário sem papel ainda consegue? Tenant B vê dado do A?</li>
+      <li><strong>Tempo:</strong> job roda duas vezes? Janela de promoção/meia-noite?</li>
+      <li><strong>Falha:</strong> dependency down; a UI mente “sucesso”?</li>
     </ul>
+    <p>Em pagamento/estorno eu quase sempre gasto a última hora em Data + Operações + Permissão. É onde já vi o maior blast radius com menos linhas de código.</p>
 
-    <p>Quando a conversa é trade-off explícito, o aceite é do negócio — não um carimbo mágico de QA. Eu desenhei o papel de qualidade como quem estrutura a decisão, não como quem “autoriza” por autoridade de área.</p>
-
-    <h3>O que pede evidência versus o que pede julgamento</h3>
+    <h2>O que eu pulo de propósito</h2>
     <ul>
-      <li><strong>Evidência:</strong> smoke das jornadas irreversíveis, contratos quebrados, migração rodada em cópia, alerta ligado.</li>
-      <li><strong>Julgamento:</strong> quanto explorar borda de UX, se o risco de copy errada justifica atrasar receita, se canary de 5% basta.</li>
+      <li>Variação cosmética e CMS volátil.</li>
+      <li>Fluxo com uso irrelevante e zero incidente, salvo se a mudança foi exatamente ali.</li>
+      <li>Revalidar regra já coberta por unit/contrato quando a UI só mudou estilo.</li>
+      <li>Browser/device Tier C sem telemetria que justifique.</li>
+      <li>Exploratório amplo sem carta de risco.</li>
+      <li>Perf pleno se a mudança não toca caminho quente e o contínuo leve está verde. (Mudança arquitetural: não pulo stress.)</li>
     </ul>
+    <p>O que não corto sem mitigação explícita: pagamento, PII, authz, migrate destrutiva, path de deploy. “Só dessa vez” exige aceite nomeado + monitoramento + rollback, no release note interno. Slack verbal não conta.</p>
 
-    <p>Misturar os dois sem declarar qual é qual gera falso conforto (“temos testes”) ou falso pânico (“nada está garantido”).</p>
+    <h2>Evidência versus julgamento</h2>
+    <p><strong>Evidência:</strong> smoke dos irreversíveis, contrato quebrado no CI, migration em cópia, alerta ligado, canary com critério de abort.</p>
+    <p><strong>Julgamento:</strong> quanto explorar UX, se copy errada atrasa receita, se 5% de canary basta.</p>
+    <p>Declare qual é qual. “Temos testes” misturado com “acho que vai” é como o time se ilude junto.</p>
 
-    <h2>O que pular de propósito</h2>
+    <h2>Quando o processo só parece maduro</h2>
+    <p>Você reconhece teatro de risco: plano “testar tudo”; priorizar o fácil de automatizar em vez do blast radius; esconder o não-testado; planilha FMEA que ninguém atualiza; priorização feita por quem não leu o diff; suite verde tratada como risco novo coberto; “QA aprovou” no fio do Slack. Qualidade vira freio político, não redução de dano.</p>
 
-    <p>Pular não é fracasso se for deliberado. Exemplos que corto cedo quando o clock aperta:</p>
-    <ul>
-      <li>Variações cosméticas e conteúdo CMS volátil.</li>
-      <li>Fluxos com &lt; fração irrelevante de uso e sem histórico de incidente — salvo se a mudança foi exatamente ali.</li>
-      <li>Revalidar regras já cobertas por unitário/contrato quando a UI só mudou estilo.</li>
-      <li>Browsers/devices Tier C na ausência de telemetria que justifique.</li>
-      <li>Bateria exploratória ampla sem carta de risco — vira turismo.</li>
-      <li>Perf pleno quando a mudança não toca caminho quente e o contínuo leve está verde (ainda assim: não pular stress se a mudança for arquitetural).</li>
-    </ul>
-
-    <p>O que <strong>não</strong> corto sem mitigação explícita: pagamento, PII, authz, migrate destrutiva, path de deploy. Se alguém pedir para cortar isso “só dessa vez”, o preço é aceite nomeado + monitoramento + plano de rollback — por escrito no release note interno.</p>
-
-    <h2>Anti-padrões</h2>
-    <ul>
-      <li>“Testar tudo” como plano.</li>
-      <li>Priorizar pelo que é fácil de automatizar, não pelo blast radius.</li>
-      <li>Esconder o não-testado para parecer seguro.</li>
-      <li>Planilha de risco que ninguém atualiza — teatro de compliance.</li>
-      <li>Deixar a priorização só com quem não tem contexto da mudança.</li>
-      <li>Confundir suite verde com risco novo coberto.</li>
-      <li>Aceite verbal no Slack sem rastro.</li>
-      <li>Tratar qualidade como freio: otimiza atrito político, não redução de dano.</li>
-    </ul>
-
-    <h2>O que eu colocaria em produção na segunda</h2>
+    <h2>Sete mudanças baratas que alteram o próximo RC</h2>
+    <p>Sem ferramenta nova. Sem workshop de três dias. Só músculo operacional.</p>
     <ol>
-      <li>Publicar a lista dos fluxos irreversíveis do produto (uma página, exemplos concretos).</li>
-      <li>Adotar score 1–5 de impacto × probabilidade × detectabilidade com âncoras — sem ferramenta nova.</li>
-      <li>Instituir ritual de 15 minutos de corte em todo release candidate.</li>
-      <li>Template de “não-testado” com risco residual, mitigação e dono do aceite.</li>
-      <li>Amarrar o top da lista irreversível a smoke bloqueante no CI (se ainda não estiver).</li>
-      <li>Revisar os últimos 3 incidentes: teriam sido priorizados pelo modelo? Ajustar âncoras.</li>
-      <li>Combinar com produto a linguagem de trade-off (consequência + mitigação) e abandonar “QA aprovou”.</li>
-      <li>No próximo aperto de prazo, praticar o corte em voz alta e registrar — músculo se treina sob pressão real.</li>
+      <li><strong>Uma página de irreversíveis</strong> do seu produto, com exemplo concreto por item (não “pagamento” genérico: “estorno parcial + retry do PSP”).</li>
+      <li><strong>Âncoras 1–5</strong> de impacto, probabilidade e detectabilidade coladas no README de QA ou no Confluence curto. Três bullets por eixo bastam.</li>
+      <li><strong>Template de não-testado</strong> com quatro campos: item, risco residual, mitigação, dono do aceite. Obrigatório no RC.</li>
+      <li><strong>Ritual de 15 minutos</strong> no calendário de todo release candidate. Se ninguém de produto puder aceitar risco, o ritual não começou.</li>
+      <li><strong>Smoke bloqueante</strong> amarrado aos irreversíveis no CI. Se ainda não está, comece pelo top 3.</li>
+      <li><strong>Post-mortem reverso:</strong> três incidentes recentes. O modelo teria priorizado? Se não, ajuste a âncora (quase sempre detectabilidade subestimada).</li>
+      <li><strong>Matar a frase “QA aprovou”.</strong> Substituir por trade-off: protegemos X, aceitamos Y, mitigação Z.</li>
     </ol>
+    <p>Na primeira quinta apertada depois disso, pratique o corte em voz alta e registre. Priorização é músculo. Treina sob pressão real, não em slide.</p>
 
-    <div class="callout">
-      <p>Se o tempo acabou e a lista de fora não existe, o processo falhou antes do teste. Visão de risco começa pelo inventário do que você aceita não saber — e pelo preço dessa aceitação.</p>
-    </div>
-
-    <p>O entregável, quando o tempo acaba, não é “testamos tudo”. É: protegemos X, aceitamos Y, e todo mundo sabe o que isso significa se der errado. Isso já é qualidade — sem heroísmo.</p>
+    <p>Quando o tempo acaba, o entregável não é “testamos tudo”. É: protegemos X, aceitamos Y, e todo mundo sabe o preço se Y doer. Isso já é qualidade. Sem heroísmo e sem suite como muleta moral.</p>
 
     <div class="article__foot">
       <a href="../index.html#artigos">← Voltar aos artigos</a>
