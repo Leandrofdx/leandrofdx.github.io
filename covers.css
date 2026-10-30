@@ -163,7 +163,7 @@
   background: linear-gradient(180deg, #3c3c3e, #141416);
 }
 
-/* 04 — curve that narrows attention */
+/* 05 — curve that narrows attention + cyan focus */
 .cover--focus .cover__a {
   right: -28%;
   bottom: -38%;
@@ -171,6 +171,7 @@
   height: 120%;
   border-radius: 50%;
   background: radial-gradient(circle at 32% 36%, #FDFCFE 0%, #C4C2C8 26%, #2a2a2c 64%);
+  box-shadow: inset 0 0 0 1px rgba(8, 145, 178, 0.12);
 }
 
 .cover--focus .cover__b {
@@ -183,7 +184,15 @@
 }
 
 .cover--focus .cover__c {
-  display: none;
+  left: 22%;
+  bottom: 22%;
+  width: 28%;
+  height: 9%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #0891b2, #67e8f9);
+  box-shadow:
+    0 8px 20px rgba(8, 145, 178, 0.35),
+    0 0 28px rgba(103, 232, 249, 0.25);
 }
 
 /* 05 — rising load */
