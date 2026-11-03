@@ -224,14 +224,15 @@
   box-shadow: 0 12px 28px rgba(8, 145, 178, 0.3);
 }
 
-/* 06 — depth, an opening */
+/* 07 — depth, an opening + cyan rim */
 .cover--depth .cover__a {
   right: -8%;
   bottom: -18%;
   width: 78%;
   height: 95%;
   border-radius: 50%;
-  background: radial-gradient(circle at 50% 50%, #121214 0 34%, #86848C 35% 46%, #f3f0ea 47% 100%);
+  background: radial-gradient(circle at 50% 50%, #121214 0 34%, #0891b2 35% 38%, #86848C 39% 46%, #f3f0ea 47% 100%);
+  box-shadow: 0 0 40px rgba(8, 145, 178, 0.18);
 }
 
 .cover--depth .cover__b {
@@ -239,14 +240,14 @@
   bottom: 14%;
   width: 28%;
   height: 10%;
-  background: linear-gradient(90deg, #1c1c1e, transparent);
+  background: linear-gradient(90deg, #0891b2, transparent);
 }
 
 .cover--depth .cover__c {
   display: none;
 }
 
-/* 07 — two planes meeting */
+/* 08 — two planes meeting + cyan seam */
 .cover--corner .cover__a {
   left: 0;
   bottom: 12%;
@@ -269,7 +270,8 @@
   bottom: 0;
   width: 7%;
   height: 42%;
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.35), transparent);
+  background: linear-gradient(90deg, #67e8f9, #0891b2);
+  box-shadow: 0 8px 20px rgba(8, 145, 178, 0.3);
 }
 
 /* 08 — tall connected slabs */
@@ -295,10 +297,11 @@
 .cover--vertical .cover__c {
   left: 62%;
   height: 52%;
-  background: linear-gradient(180deg, #ece8e2, #6C6A72);
+  background: linear-gradient(180deg, #67e8f9 0%, #0891b2 45%, #121214 100%);
+  box-shadow: 0 12px 28px rgba(8, 145, 178, 0.3);
 }
 
-/* 09 — two faces, one gap */
+/* 10 — two faces, one cyan gap */
 .cover--meet .cover__a,
 .cover--meet .cover__b {
   bottom: 8%;
@@ -318,10 +321,16 @@
 }
 
 .cover--meet .cover__c {
-  display: none;
+  left: 46%;
+  bottom: 28%;
+  width: 8%;
+  height: 12%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #0891b2, #67e8f9);
+  box-shadow: 0 8px 20px rgba(8, 145, 178, 0.35);
 }
 
-/* 10 — a mass, and one that thins out */
+/* 11 — a mass, and one that thins out */
 .cover--fade .cover__a {
   left: 10%;
   bottom: 8%;
@@ -337,14 +346,19 @@
   width: 32%;
   height: 40%;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.75), rgba(44, 44, 46, 0.05));
-  box-shadow: inset 0 0 0 1px rgba(20, 20, 22, 0.06);
+  box-shadow: inset 0 0 0 1px rgba(8, 145, 178, 0.2);
 }
 
 .cover--fade .cover__c {
-  display: none;
+  left: 10%;
+  bottom: 8%;
+  width: 6%;
+  height: 54%;
+  background: linear-gradient(180deg, #67e8f9, #0891b2);
+  box-shadow: 0 8px 20px rgba(8, 145, 178, 0.28);
 }
 
-/* 11 — a clear passage */
+/* 12 — a clear passage + cyan bridge */
 .cover--passage .cover__a,
 .cover--passage .cover__b {
   bottom: 0;
@@ -367,10 +381,12 @@
   bottom: 18%;
   width: 24%;
   height: 8%;
-  background: linear-gradient(180deg, #F7F6F8, #D4D2D8);
+  border-radius: 999px;
+  background: linear-gradient(90deg, #0891b2, #67e8f9);
+  box-shadow: 0 8px 20px rgba(8, 145, 178, 0.35);
 }
 
-/* 12 — a foundation */
+/* 13 — a foundation + cyan edge */
 .cover--foundation .cover__a {
   left: 14%;
   bottom: -4%;
@@ -385,16 +401,17 @@
   bottom: 2%;
   width: 22%;
   height: 52%;
-  background: linear-gradient(180deg, #86848C, #1c1c1e);
+  background: linear-gradient(180deg, #67e8f9 0%, #0891b2 35%, #1c1c1e 100%);
   transform: skewY(-14deg);
   transform-origin: left bottom;
+  box-shadow: 0 12px 28px rgba(8, 145, 178, 0.25);
 }
 
 .cover--foundation .cover__c {
   display: none;
 }
 
-/* 13 — steps, one turn ahead */
+/* 14 — steps, one turn ahead */
 .cover--stairs .cover__a,
 .cover--stairs .cover__b,
 .cover--stairs .cover__c {
@@ -418,7 +435,8 @@
 .cover--stairs .cover__c {
   left: 56%;
   bottom: 32%;
-  background: linear-gradient(180deg, #3e3e40, #141416);
+  background: linear-gradient(180deg, #67e8f9 0%, #0891b2 55%, #141416 100%);
+  box-shadow: 0 8px 20px rgba(8, 145, 178, 0.3);
 }
 
 /* 04 — product bridge: two shores, one span */

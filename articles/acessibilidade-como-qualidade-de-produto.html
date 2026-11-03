@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Acessibilidade como qualidade de produto — Leandro Lima</title>
-  <meta name="description" content="Acessibilidade no ciclo de qualidade: WCAG, testes com teclado e leitor de tela, automação axe/Playwright, gate sem teatro e por que a11y é risco de produto — não checklist cosmético." />
+  <title>Acessibilidade: qualidade que a auditoria não vê sozinha — Leandro Lima</title>
+  <meta name="description" content="A11y como qualidade de produto: axe no CI, teclado, leitor de tela, risco legal e como priorizar o que bloqueia o usuário." />
   <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="article.css" />
-  <link rel="stylesheet" href="../covers.css?v=9" />
+  <link rel="stylesheet" href="../covers.css?v=11" />
 </head>
 <body>
   <header class="top">
@@ -22,117 +22,56 @@
       <span class="cover__c"></span>
     </div>
     <span class="article__tag">Acessibilidade</span>
-    <h1>Acessibilidade como qualidade de produto</h1>
-    <p class="article__meta">Leitura ~12 min · Quality Engineering</p>
+    <h1>Acessibilidade: qualidade que a auditoria não vê sozinha</h1>
+    <p class="article__meta">Leitura ~15 min · Quality Engineering</p>
 
-    <p>Acessibilidade não é “feature social” opcional nem slide de compliance no fim do projeto. É qualidade de produto: se uma pessoa não consegue comprar, autenticar, ler o erro ou concluir o fluxo com teclado e leitor de tela, o sistema falhou — do mesmo jeito que falha com bug de pagamento ou p99 estourado.</p>
-    <p>Eu testo acessibilidade porque me importo com quem usa o produto em condições diferentes das minhas — e porque ignorei isso custa caro: exclusão, risco jurídico (LBI / WCAG em contratos públicos), retrabalho tardio e dívida de UI que a automação “feliz path” nunca vai pegar.</p>
-
-    <div class="callout">
-      <p>A11y madura não é score 100 no Lighthouse uma vez. É critério de release, regressão contínua e empatia operacional — teclado, contraste, nome acessível, foco e leitor de tela no caminho crítico.</p>
-    </div>
-
-    <h2>O failure mode clássico</h2>
-    <p>O time “passa no axe” no CI, celebra o badge e ninguém nunca navegou o checkout só com Tab. Ou pior: contrata auditoria pontual, gera PDF de 80 páginas, e zero item vira gate. Outro modo de falha: tratar acessibilidade como responsabilidade exclusiva de design — QA só “valida visual”. Resultado: botão sem nome, modal que prende foco, erro só em cor, formulário que o VoiceOver não anuncia.</p>
-    <p>Automação ajuda. Automação sozinha mente. Ferramentas pegam uma fatia (muitos problemas de nome, contraste estático, ARIA quebrada). Não substituem julgamento humano nem teste com tecnologia assistiva.</p>
-
-    <h2>Framework: o que eu cobro em qualidade</h2>
-    <p>Uso quatro camadas — baratas primeiro, caras quando o risco justifica.</p>
-
-    <h3>1. Padrão e escopo</h3>
-    <ul>
-      <li><strong>WCAG 2.2</strong> como referência (AA como alvo mínimo de produto; AAA só onde o negócio exige).</li>
-      <li><strong>Jornadas críticas</strong> — login, compra, agendamento, recuperação de senha, fluxos com dado sensível — não “todas as telas do design system de uma vez”.</li>
-      <li><strong>Persona assistiva mínima</strong> — teclado only, leitor de tela (VoiceOver / NVDA), zoom 200%, contraste.</li>
-    </ul>
-
-    <h3>2. Shift-left no componente</h3>
-    <ul>
-      <li>Storybook / design system com regras de foco, label, estado disabled anunciável.</li>
-      <li>PR de componente novo sem <code>aria-*</code> inventado sem padrão — ARIA errada piora a experiência.</li>
-      <li>Checklist curto no code review: nome acessível, ordem de foco, contraste do estado de erro.</li>
-    </ul>
-
-    <h3>3. Automação no pipeline</h3>
-    <ul>
-      <li><strong>axe-core</strong> (via Playwright, Cypress ou pa11y) nas rotas críticas a cada PR relevante.</li>
-      <li>Assersões de <strong>nome acessível</strong> e papéis (getByRole) — o teste já documenta como a UI deve ser percebida.</li>
-      <li>Lint de a11y em JSX/HTML quando o stack permite (eslint-plugin-jsx-a11y).</li>
-      <li>Gate com baseline: falhas novas bloqueiam; débito conhecido versionado, com dono e prazo — não “warn forever”.</li>
-    </ul>
-
-    <h3>4. Exploração assistiva (a camada que importa)</h3>
-    <ul>
-      <li>Script de teclado: Tab / Shift+Tab / Enter / Esc / setas onde fizer sentido.</li>
-      <li>Leitor de tela no fluxo feliz e no fluxo de erro.</li>
-      <li>Mobile: TalkBack / VoiceOver, tamanho de toque, orientação.</li>
-      <li>Cadência: release candidate ou mudança em jornada crítica — não só “quando sobrar tempo”.</li>
-    </ul>
-
-    <h2>Playbook: o que eu automatizo vs o que eu faço com as mãos</h2>
-
-    <h3>Automatizo com confiança relativa</h3>
-    <ul>
-      <li>Imagem sem texto alternativo (quando deveria ter).</li>
-      <li>Contraste de texto estático abaixo do limiar.</li>
-      <li>Controles sem nome acessível.</li>
-      <li>HTML inválido óbvio (label órfão, id duplicado que quebra associação).</li>
-      <li>Regressão de role/name em componentes versionados.</li>
-    </ul>
-
-    <h3>Não confio só na ferramenta</h3>
-    <ul>
-      <li>Ordem de foco em modal e drawer.</li>
-      <li>Mensagem de erro anunciada (live region) no tempo certo.</li>
-      <li>Captcha, drag-and-drop, canvas, mapa, player de mídia.</li>
-      <li>Conteúdo dinâmico de SPA que “passa no axe” e falha no leitor.</li>
-      <li>Linguagem clara e hierarquia de heading que faça sentido semântico.</li>
-    </ul>
+    <p>O relatório do axe veio verde. No mesmo fluxo, o botão de pagar não tem nome acessível; o modal trava o foco; o toast some em dois segundos sem anúncio. A auditoria automática pegou contraste e alt. Não pegou a jornada. Alguém com leitor de tela ou só teclado não conclui a compra. Isso é bug de produto, não “item de compliance”.</p>
+    <p>A11y no QE é risco: exclusão, processo, reputação. Scanner no CI é piso. O teto é jornada crítica usável por teclado e tecnologia assistiva.</p>
 
     <div class="callout">
-      <p>Se o teste E2E só clica por CSS/XPath e nunca por papel/nome, a suíte treina o time a entregar UI que máquina encontra e pessoa usando leitor não.</p>
+      <p>Verde no axe sem smoke de teclado é falso conforto. Trate como cobertura incompleta, não como aprovação.</p>
     </div>
 
-    <h2>Como eu encaixo no Quality Gate</h2>
-    <p>Acessibilidade entra na mesma lógica de gate em camadas:</p>
+    <h2>Visão de risco</h2>
+    <p>Impacto: usuário bloqueado, ação legal, marca. Probabilidade: alta em SPAs com modal, formulário e componente custom. Detectabilidade: baixa se só tem scanner; média com checklist de teclado; alta com sessão assistida periódica.</p>
+
+    <h2>O que o CI deve pegar</h2>
+    <ul>
+      <li>Regras WCAG automatizáveis nas páginas críticas (login, checkout, conta).</li>
+      <li>Falha bloqueante em severidade alta nas rotas core; o resto no backlog com dono.</li>
+      <li>Diff: regressão nova importa mais que dívida antiga sem prioridade.</li>
+    </ul>
+    <p>Não abra o scanner em tudo no dia um. Comece pelo caminho de dinheiro e retenção.</p>
+
+    <h2>O que o humano (e o QE) ainda precisa</h2>
     <ol>
-      <li><strong>Rápido</strong> — lint a11y + axe nas páginas tocadas pelo diff.</li>
-      <li><strong>Sob mudança</strong> — fluxos críticos com getByRole + smoke de teclado automatizado onde for estável.</li>
-      <li><strong>Caro</strong> — sessão assistiva humana / RC antes de release grande ou redesign.</li>
+      <li><strong>Teclado:</strong> Tab/Shift+Tab, Enter/Espaço, Escape no modal, foco visível, ordem lógica.</li>
+      <li><strong>Nome, papel, valor:</strong> botão sem texto, ícone sem label, input sem associação.</li>
+      <li><strong>Estado dinâmico:</strong> erro de formulário anunciado; loading; toast.</li>
+      <li><strong>Contraste e zoom:</strong> conteúdo usável em 200% sem perda de função.</li>
     </ol>
-    <p>Limiar: bloqueio para severidade alta em jornada irreversível (auth, pagamento, dados pessoais). Débito médio entra no backlog com ID e data — não some no Notion eterno.</p>
 
-    <h2>Conversa com produto e engenharia</h2>
-    <p>A11y vende mal como “faça o bem”. Vende melhor como risco:</p>
-    <ul>
-      <li><strong>Alcance</strong> — parte relevante da base não completa o fluxo.</li>
-      <li><strong>Legal / edital</strong> — requisito explícito em governo e grandes contratos.</li>
-      <li><strong>Qualidade estrutural</strong> — semântica boa melhora SEO, automação e manutenção.</li>
-      <li><strong>Marca</strong> — exclusão vira história pública rápido.</li>
-    </ul>
-    <p>Na forma de falar, evito tom de sermão. Prefiro evidência: “neste build o botão Confirmar não tem nome acessível; VoiceOver lê ‘botão’; impacto no checkout; correção é label/aria-label no componente X”.</p>
+    <h2>Prioridade prática</h2>
+    <p>Bloqueia conclusão da jornada: P0. Dificulta mas há alternativa: P1. Cosmético em página secundária: P2. Design system com componente quebrado multiplica o impacto: priorize a raiz.</p>
 
-    <h2>Anti-padrões</h2>
-    <ul>
-      <li><strong>Overlay mágico</strong> de acessibilidade como solução — raramente substitui HTML semântico e costuma quebrar mais.</li>
-      <li><strong>Só contraste no Figma</strong> — e zero teste no produto renderizado.</li>
-      <li><strong>ARIA em tudo</strong> — quando um botão nativo resolvia.</li>
-      <li><strong>Score de Lighthouse como KPI único</strong> — fácil de gamear, frágil como verdade.</li>
-      <li><strong>“Vamos deixar para depois do lançamento”</strong> — depois vira redesign.</li>
-      <li><strong>Testar só happy path visual</strong> — erro e vazio são onde a11y mais falha.</li>
-    </ul>
+    <h2>Como encaixar no time</h2>
+    <p>Critério de aceite com “teclado + nome acessível” nas histórias de UI. Storybook ou fixture do componente no CI. Uma sessão assistida por trimestre nas jornadas top. Não transforme a11y em projeto paralelo eterno; embute no Definition of Done das telas que importam.</p>
 
-    <h2>Checklist de segunda</h2>
-    <ul>
-      <li>Mapear 3–5 jornadas críticas e o nível WCAG alvo (AA).</li>
-      <li>Ligar axe (ou equivalente) no CI nessas rotas, com baseline versionada.</li>
-      <li>Reescrever 1 smoke E2E para <strong>getByRole / nome acessível</strong>.</li>
-      <li>Rodar um fluxo só de teclado e anotar as três piores barreiras.</li>
-      <li>Abrir 1–3 issues com severidade, evidência e componente dono — sem manifesto genérico.</li>
-      <li>Combinar com design: tokens de contraste e estados de foco visíveis no DS.</li>
-    </ul>
+    <h3>Exemplo de regressão</h3>
+    <p>Design system troca o botão primário por ícone sem <code>aria-label</code>. Scanner pega em Storybook no PR do DS. Sem isso, o checkout inteiro herda o buraco e o axe “na página” vira mil tickets iguais. Priorize a raiz.</p>
 
-    <p>Não escrevo sobre a11y por moda. Escrevo porque já vi fluxo “verde” no CI e inutilizável de teclado. Se o produto é para pessoas, isso não é extra — é o mesmo critério que uso para pagamento e PII. Só que aqui o prejuízo às vezes não aparece no dashboard.</p>
+    <h2>O que não é estratégia</h2>
+    <p>PDF de auditoria anual sem CI. “Vamos treinar o time” sem gate. Corrigir só contraste e deixar modal sem foco. Tratar a11y como projeto de marketing. Qualidade que protege o produto inclui quem não opera o mouse.</p>
+
+    <h2>Na próxima sprint</h2>
+    <ol>
+      <li>Ligue axe (ou equivalente) no CI nas três rotas mais caras.</li>
+      <li>Faça um smoke de teclado no checkout ou equivalente.</li>
+      <li>Liste os cinco componentes mais usados sem label.</li>
+      <li>Nomeie dono de a11y no design system, não só no QA.</li>
+    </ol>
+
+    <p>Acessibilidade boa é produto usável por mais gente. Auditoria sem jornada é só PDF.</p>
 
     <div class="article__foot">
       <a href="../index.html#artigos">← Voltar aos artigos</a>

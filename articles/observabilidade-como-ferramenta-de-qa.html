@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Observabilidade como ferramenta de QA — Leandro Lima</title>
-  <meta name="description" content="Traces, métricas e logs como ferramenta de QA: OpenTelemetry em ambientes de teste, correlação de falha com spans, diagnóstico de performance, sinais que provam correção e golden journeys instrumentadas." />
+  <title>Quando o teste falha e ninguém sabe por quê — Leandro Lima</title>
+  <meta name="description" content="Observabilidade para QA: correlacionar falha com trace, provar correção com sinal, OpenTelemetry em ambiente de teste e por que screenshot sozinho não basta." />
   <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="article.css" />
-  <link rel="stylesheet" href="../covers.css?v=9" />
+  <link rel="stylesheet" href="../covers.css?v=11" />
 </head>
 <body>
   <header class="top">
@@ -22,119 +22,70 @@
       <span class="cover__c"></span>
     </div>
     <span class="article__tag">Observabilidade</span>
-    <h1>Observabilidade como ferramenta de QA</h1>
-    <p class="article__meta">Leitura ~12 min · Quality Engineering</p>
+    <h1>Quando o teste falha e ninguém sabe por quê</h1>
+    <p class="article__meta">Leitura ~16 min · Quality Engineering</p>
 
-    <p>Assert verde/vermelho sem contexto é diagnóstico cego. A tese: observabilidade — traces, métricas e logs correlacionados — não é só ferramenta de SRE em produção; é infraestrutura de investigação para Quality Engineering em teste, staging e canário. Quando um e2e falha, eu quero o <code>trace_id</code>, o span lento e o evento de negócio — não um screenshot e um “timeout no step 7”.</p>
-    <p>O failure mode é o QA tratado como consumidor passivo de dashboards feitos para on-call. Instrumentação existe só em prod, ambientes de teste não exportam OTel, testes não propagam context, e a post-mortem do teste flaky vira achismo (“rede”, “CI lento”). Sem telemetria no caminho do teste, você otimiza suíte por feeling e corrige sintoma.</p>
+    <p>CI vermelho. Step 7: timeout. Screenshot do botão que não clicou. Alguém comenta “flake” e pede rerun. Três reruns depois o job fica verde e o PR sobe. Duas horas depois, produção mostra o mesmo sintoma: pay lento no hop do antifraude. O teste tinha visto a verdade. Faltava o mapa.</p>
+    <p>Observabilidade, para QA, é isso: transformar “passou/falhou” em “o sistema fez X, em Y ms, neste hop”. Sem isso você debugga feeling.</p>
 
     <div class="callout">
-      <p>QA maduro não pergunta só “passou?”. Pergunta “o que o sistema fez, em quanto tempo, e qual span prova que a correção pegou?”.</p>
+      <p>QA maduro não pergunta só se passou. Pergunta o que o sistema fez, em quanto tempo, e qual evidência prova que a correção pegou.</p>
     </div>
 
-    <h2>Framework: três sinais, um ID</h2>
-    <p>Desenhei o uso de observabilidade em QA em torno de um contrato mínimo entre teste e sistema:</p>
+    <h2>Três sinais e um fio</h2>
+    <p>Antes do jargão: o que você precisa enxergar.</p>
     <ul>
-      <li><strong>Trace</strong> — causalidade e latência por hop (HTTP, DB, fila, cache).</li>
-      <li><strong>Métrica</strong> — agregados RED/USE e SLIs de jornada (taxa de sucesso, duração p95/p99).</li>
-      <li><strong>Log</strong> — fato discreto com atributos (pedido_id, resultado, motivo de negócio).</li>
-      <li><strong>Correlação</strong> — mesmo <code>trace_id</code> / <code>correlation_id</code> do cliente de teste até o backend.</li>
+      <li><strong>Trace:</strong> a história da request. Cada passo (HTTP, banco, fila, cache) vira um pedaço com tempo. Dá para ver onde a jornada engasgou.</li>
+      <li><strong>Métrica:</strong> número agregado no tempo. Taxa de erro, duração no p95 da jornada, saturação de pool. Bom para tendência e gate.</li>
+      <li><strong>Log:</strong> fato pontual. “pedido_id=… status=recusado motivo=…”. Bom para negócio e auditoria.</li>
     </ul>
-    <p>Sem o quarto item, os três primeiros viram ilhas. Padronizei: todo runner de teste (API, e2e, job de carga) injeta e propaga W3C Trace Context. O relatório de falha inclui link direto para o trace no backend de telemetria do ambiente.</p>
+    <p>O quarto item une os três: <strong>correlação</strong>. O mesmo identificador (trace_id) sai do teste, atravessa o BFF e chega no serviço. Sem isso, trace, métrica e log são ilhas. Eu padronizei: todo runner (API, e2e, carga) propaga o contexto de rastreio. O relatório de falha carrega o link do trace, não só o PNG.</p>
 
-    <h3>OTel em ambiente de teste — não “prod-like de mentira”</h3>
-    <p>Ambiente de teste precisa exportar spans com sampling alto o suficiente para investigar falhas (muitas vezes 100% em CI ephemeral; head-based ou tail-based com cuidado em load). O que eu exijo:</p>
+    <h2>Por que isso é risco, não “ferramenta de SRE”</h2>
+    <p>Impacto: incidente com diagnóstico cego custa horas e reputação. Probabilidade: sobe quando o sistema tem muitos hops e o teste só olha a borda. Detectabilidade: sem telemetria no caminho do teste, o flake e a regressão de latência passam por “CI instável”.</p>
+    <p>Failure mode clássico: instrumentação só em produção, staging mudo, teste sem propagar contexto. Aí a post-mortem do job vermelho vira achismo (“rede”, “CI lento”).</p>
+
+    <h2>O que eu exijo no ambiente de teste</h2>
     <ol>
-      <li>SDK/agent OTel nos serviços sob teste (mesmas bibliotecas de prod, endpoint diferente).</li>
-      <li>Resource attributes: <code>deployment.environment</code>, <code>service.version</code>, <code>test.run_id</code>.</li>
-      <li>Propagação HTTP/gRPC/messaging ligada — senão o trace quebra no BFF.</li>
-      <li>Retenção curta e barata (dias), não o mesmo retention de prod — senão FinOps mata a ideia.</li>
+      <li>Mesmas libs de telemetria de produção, destino diferente (collector de teste).</li>
+      <li>Atributos claros: ambiente, versão do serviço, id da execução do teste.</li>
+      <li>Propagação ligada em HTTP, gRPC e mensagem. Se quebra no BFF, o trace mente.</li>
+      <li>Sampling alto o bastante para investigar falha (em CI efêmero, muitas vezes 100%). Retenção curta: dias, não meses. Senão o custo mata a ideia.</li>
     </ol>
-    <p>“Prod-like” sem telemetria não é prod-like para QA. É só uma caixa-preta mais cara.</p>
+    <p>Ambiente “parecido com prod” sem telemetria não é parecido para QA. É caixa-preta mais cara.</p>
 
-    <h2>Playbook</h2>
-
-    <h3>1. Correlacionar teste falho com spans</h3>
-    <p>No teardown/onFailure do framework:</p>
+    <h2>Quando o e2e falha: o ritual</h2>
+    <p>No momento da falha (não amanhã):</p>
     <ul>
-      <li>Capturar <code>trace_id</code> da requisição raiz (ou do browser via header/cookie instrumentado).</li>
-      <li>Anexar ao report (Allure, HTML, annotation do CI) o deep link do Trace UI.</li>
-      <li>Classificar falha: assert de negócio vs erro 5xx vs deadline vs span de dependência externa.</li>
+      <li>Capturar o trace_id da request raiz.</li>
+      <li>Anexar no report o link do Trace UI.</li>
+      <li>Classificar: assert de negócio, 5xx, deadline, dependência externa.</li>
     </ul>
-    <p>Isso muda a conversa no PR: de “seu teste quebrou” para “o span <code>POST /payments</code> subiu de 80ms para 2.1s no hop do fraud-check”. O dono do serviço enxerga a evidência sem reproduzir no laptop.</p>
+    <p>A conversa no PR muda. De “seu teste quebrou” para “o span POST /payments foi de 80 ms para 2,1 s no hop do fraud-check”. O dono do serviço vê a evidência sem reproduzir no notebook.</p>
 
-    <h3>2. Diagnóstico de performance na esteira</h3>
-    <p>Perf de regressão sem trace aponta o sintoma (p99 do endpoint). Com trace, você separa:</p>
-    <ul>
-      <li>CPU/GC no serviço</li>
-      <li>query N+1 / lock de DB</li>
-      <li>retry storm em dependência</li>
-      <li>cold start / autoscaling</li>
-      <li>payload/serialization</li>
-    </ul>
-    <p>Defini budgets por golden journey: p95 do span raiz e teto por span filho crítico. O job de perf falha com o span culpado no log do CI — não só com gráfico de RPS.</p>
+    <h3>Exemplo com números</h3>
+    <p>Checkout e2e falha em 40% dos runs às 11h. Sem trace: “instável”. Com trace: 9 de 10 falhas concentram 1,8 s no mesmo span de estoque; pool de conexão em espera. Não é seletor. É saturação. Você para de reescrever Page Object e abre o ticket certo.</p>
 
-    <h3>3. Sinais que provam a correção</h3>
-    <p>Bug fix sem sinal de verificação é fé. Para cada correção relevante, combino:</p>
-    <ul>
-      <li><strong>Teste</strong> que reproduzia a falha (agora verde).</li>
-      <li><strong>Métrica/SLI</strong> que estava fora (taxa de erro, latência, fila lag) voltando à baseline.</li>
-      <li><strong>Trace exemplar</strong> pós-fix mostrando o caminho esperado (ex.: não passa mais pelo código morto; cache hit; uma única query).</li>
-    </ul>
-    <p>Se só o teste passou e a métrica de staging continua ruim, o fix é incompleto ou o teste não exercita o caminho de produção.</p>
+    <h2>Performance e correção: o mesmo fio</h2>
+    <p>Job de carga que só mostra p95 alto aponta sintoma. Com trace você separa: query lenta, retry, cold start, serialização. Budget por jornada: teto no span raiz e nos filhos críticos. O CI fala o hop culpado.</p>
+    <p>Bug fix sem sinal de verificação é fé. Combino: teste que reproduzia a falha (agora verde) + métrica ou span que mostra o comportamento novo na janela do deploy. “Corrigimos” sem prova no sinal é narrativa.</p>
 
-    <h3>4. Golden journeys instrumentadas</h3>
-    <p>Escolho 5–10 jornadas de negócio (login → browse → checkout; onboarding; reembolso). Para cada uma:</p>
+    <h2>Golden journeys instrumentadas</h2>
+    <p>Escolha 1–3 jornadas de receita ou risco. Em cada uma: eventos de negócio (pedido criado, pagamento aprovado), atributos de etapa, alertas alinhados ao que o teste já cobre. Assim teste e produção falam a mesma língua.</p>
+
+    <h2>Quando a telemetria só atrapalha</h2>
+    <p>Instrumentar tudo explode cardinalidade e conta. Ninguém olha. Sinais por risco. Dashboard sem dono. Trace sem link no report de teste. Sampling 1% em staging quando você investiga flake. Log com PII no collector de teste.</p>
+
+    <h2>Nas próximas duas sprints</h2>
     <ol>
-      <li>Nome estável de jornada como atributo de span/evento (<code>journey.name</code>).</li>
-      <li>Eventos de negócio no log/trace: <code>order.created</code>, <code>payment.approved</code> — não só “HTTP 200”.</li>
-      <li>Dashboard único (teste + staging + prod) filtrável por versão e <code>test.run_id</code>.</li>
-      <li>Teste automatizado que executa a jornada e valida tanto assert funcional quanto budget de latência/erro.</li>
-    </ol>
-    <p>Isso evita o clássico “API 200, usuário indignado”: o evento de negócio não ocorreu, e o trace mostra onde a saga parou.</p>
-
-    <h3>5. Divisão de responsabilidade com SRE</h3>
-    <p>SRE cuida de SLO, paging, capacidade. QA define quais jornadas e asserts de telemetria entram na esteira de mudança. Eu não duplico o stack: consumo o mesmo backend OTel, com views e alertas de pré-prod orientados a regressão de release — não a pager de madrugada.</p>
-
-    <h3>6. Desenhar o que observar antes de automatizar</h3>
-    <p>Antes de escrever o e2e, mapeio a jornada em hops e pontos de falha. Para cada hop crítico: o que prova sucesso de negócio (evento), o que prova saúde técnica (span status + duração), o que seria ruído (log de debug). Só então o teste ganha asserts. Isso evita automação que só clica e espera timeout — e evita dashboard que ninguém liga ao critério de aceite.</p>
-    <p>Exemplo concreto no checkout: span raiz da journey; spans de inventory, pricing, payment, notification; eventos <code>cart.locked</code>, <code>payment.captured</code>, <code>order.confirmed</code>. Se payment captura e order não confirma, o teste falha com o gap no trace — não com “botão Finalizar não respondeu”.</p>
-
-    <h3>7. Flaky vs regressão: telemetria como árbitro</h3>
-    <p>Quando o mesmo teste falha 1 em 10 runs, a discussão padrão é “flaky de UI”. Com trace, separo:</p>
-    <ul>
-      <li>Seletor/race no cliente (sem span de erro no backend) → problema de teste/automação.</li>
-      <li>Deadline/retry no serviço (span com status error ou retries altos) → flakiness do sistema, não do assert.</li>
-      <li>Dependência externa intermitente → mock/contract na esteira de PR; e2e real só em job noturno com budget explícito.</li>
-    </ul>
-    <p>Padronizei tag no report: <code>failure.class = product | test | infra</code>, preenchida com base no trace. Sem isso, o time “quarentena” teste que na verdade estava pegando instabilidade real.</p>
-
-    <h3>8. Comparar versões, não só olhar o run atual</h3>
-    <p>Regressão de qualidade muitas vezes é relativa. Guardo baseline de telemetria por <code>service.version</code> nas golden journeys: distribuição de duração do span raiz, taxa de erro por hop, quantidade de spans filhos (proxy de N+1). O job de QA compara a build do PR com a última versão em staging/prod. Diff &gt; limiar falha com o hop culpado. Isso pega degradação que assert funcional puro nunca veria — caminho ainda “correto”, só 3× mais lento.</p>
-
-    <h2>Anti-padrões</h2>
-    <ul>
-      <li><strong>Instrumentar tudo</strong> — cardinalidade explode; custo sobe; ninguém olha. Sinais por risco.</li>
-      <li><strong>Só logs sem trace</strong> — grep eterno; causalidade perdida em arquitetura async.</li>
-      <li><strong>Trace só em prod</strong> — o bug do PR nunca tem evidência comparável.</li>
-      <li><strong>Teste sem propagar context</strong> — dashboard bonito, falha órfã.</li>
-      <li><strong>Dashboard de vaidade</strong> — 40 painéis, zero ligado a gate de release.</li>
-      <li><strong>Confundir health check com SLI de jornada</strong> — liveness verde com checkout quebrado.</li>
-      <li><strong>PII em atributo de span</strong> — telemetria vira incidente de privacidade; use IDs opacos.</li>
-    </ul>
-
-    <h2>Checklist de segunda</h2>
-    <ol>
-      <li>Pegue a última falha de e2e/CI: há <code>trace_id</code> no report? Se não, abra issue de instrumentação do runner.</li>
-      <li>Confirme que o ambiente de teste exporta OTel com <code>service.version</code> da build sob teste.</li>
-      <li>Liste 5 golden journeys; marque quais têm <code>journey.name</code> e evento de negócio no trace/log.</li>
-      <li>Para 1 regressão de perf recente: identifique o span culpado; adicione budget no job se ainda não existe.</li>
-      <li>Revise cardinalidade: atributos de alta cardinalidade (e-mail, URL crua) nos spans de teste — remova.</li>
-      <li>Defina o trio “teste + SLI + trace exemplar” para o próximo bug P1 que entrar no board.</li>
-      <li>Alinhe com SRE retenção e sampling de não-prod para não ser cortado no próximo ciclo de custo.</li>
+      <li>Faça o e2e crítico propagar e imprimir trace_id no report.</li>
+      <li>Ligue export OTel no ambiente onde a suíte roda, com retenção curta.</li>
+      <li>No próximo vermelho, abra o trace antes de culpar seletor.</li>
+      <li>Escolha uma golden journey e amarre um budget de latência a um span nomeado.</li>
+      <li>Para o próximo bug P1, defina qual sinal prova a correção além do teste verde.</li>
     </ol>
 
-    <p>O dia em que um bug veio com <code>trace_id</code> no report e a correção veio com o mesmo ID no PR, o time parou de debater feeling. Quero mais dias assim — independente do vendor do dashboard.</p>
+    <p>Screenshot mostra a tela. Trace mostra o sistema. Qualidade que só olha a tela reza no rerun. Qualidade que olha o fio corrige a causa.</p>
 
     <div class="article__foot">
       <a href="../index.html#artigos">← Voltar aos artigos</a>
