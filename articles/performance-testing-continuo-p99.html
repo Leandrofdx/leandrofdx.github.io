@@ -115,7 +115,9 @@
     <p>Base com produtos sem estoque conflituoso, cupom sem disputa, usuários perfeitos, dados quentes no cache. Na Black todo mundo cai no mesmo hero SKU. Sem massa que force concorrência e dado “sujo” de verdade, você não acorda lock nem pool.</p>
 
     <h3>Ambiente mentiroso</h3>
-    <p>Staging com banco maior que o necessário, sem rate limit de terceiro, sem a mesma regra de autoscaling, com cache eternamente quente. Ele aguenta o script. Produção, com limite real e cold start, não. Declare o que o ambiente prova: regressão de código, não capacidade de Black, se for o caso. Mentira educada ainda é mentira.</p>
+    <p>O erro clássico: montar um ambiente “igual produção” no slide, com app e rede parecidos, e um banco <strong>muito menor</strong>. Dez vezes menos dado não é só “mais barato”. Query fica mais rápida, índice cabe na memória, lock quase não disputa, vacuum e I/O não doem. O e-commerce atinge o SLA no teste <em>bem antes</em> do ponto de ruptura real. Na Black, com catálogo cheio, histórico de pedido e concorrência no mesmo SKU, o banco que “passou” vira o primeiro a cair.</p>
+    <p>Outras mentiras do mesmo pacote: sem rate limit de terceiro, autoscaling diferente do de prod, cache eternamente quente. O script passa. Produção, com limite real e cold start, não. Declare o que o ambiente prova: regressão de código, não capacidade de Black, se o banco e o volume não forem honestos. Mentira educada ainda é mentira.</p>
+    <p>Regra prática: se o banco de teste tem uma fração do volume de prod, o relatório não pode dizer “aguenta a campanha”. Pode dizer “não regredimos o código sob carga X neste dataset”. São frases diferentes. Só a segunda é verdadeira.</p>
 
     <h3>Injetor fraco ou mal colocado</h3>
     <p>Um gerador na mesma rede do alvo, máquina pequena, ou cloud que satura antes do sistema. Você mede o teto do injetor, não o do site. Para campanha séria: geradores distribuídos, ramp controlado, e checagem de que o gerador não é o gargalo.</p>
@@ -126,14 +128,14 @@
     <h3>Estratégia só de feliz</h3>
     <p>Só happy path, sem spike, sem stress além do alvo, sem falha de dependency. A promoção traz exatamente o que você não ensaiou: subida brusca, cache frio, PSP lento, retry.</p>
 
-    <p>Checklist mental antes de confiar no verde: a jornada é a de receita? A massa disputa recurso? O ambiente declara limites? O injetor não satura primeiro? O limiar é p95/erro da jornada? Tem stress e spike, não só carga confortável?</p>
+    <p>Checklist mental antes de confiar no verde: a jornada é a de receita? A massa disputa recurso? O banco tem volume e contenda críveis, ou é 10× menor e otimista? O injetor não satura primeiro? O limiar é p95/erro da jornada? Tem stress e spike, não só carga confortável?</p>
 
     <h2>Como preparar a execução</h2>
     <ol>
       <li><strong>Premissa escrita:</strong> sessões, checkout por minuto, mix mobile, regiões, features ligadas. Sem número de negócio, qualquer RPS é teatro.</li>
       <li><strong>Jornadas prioritárias:</strong> busca → PDP → carrinho → pay. Mais o que mais gera receita ou ticket.</li>
       <li><strong>Massa com conflito:</strong> SKUs quentes, cupom disputado, estoque no limite, retry de pagamento.</li>
-      <li><strong>Ambiente honesto:</strong> ou parece prod nos limites que importam, ou o relatório diz “só regressão relativa”.</li>
+      <li><strong>Ambiente honesto:</strong> volume de banco e contenda parecidos com prod nos limites que importam; senão o relatório diz só “regressão relativa neste dataset”, nunca “aguenta a Black”.</li>
       <li><strong>Injetor dimensionado:</strong> prova de que ele não é o gargalo; preferir origem distribuída na campanha.</li>
       <li><strong>Observabilidade ligada:</strong> durante o run, trace da jornada, pool, fila, scale. Verde sem causa é ansiedade.</li>
       <li><strong>Plano se falhar:</strong> flag off, pré-scale, warm cache, degradar busca, teto de anúncio. Teste sem plano de mitigação só gera medo.</li>
