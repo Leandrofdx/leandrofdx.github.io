@@ -220,7 +220,8 @@
   left: 50%;
   width: 42%;
   height: 46%;
-  background: linear-gradient(180deg, #B4B2BA, #3a3a3c 40%, #121214);
+  background: linear-gradient(180deg, #67e8f9 0%, #0891b2 45%, #121214 100%);
+  box-shadow: 0 12px 28px rgba(8, 145, 178, 0.3);
 }
 
 /* 06 — depth, an opening */

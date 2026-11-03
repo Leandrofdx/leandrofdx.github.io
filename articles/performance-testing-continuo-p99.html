@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Performance Testing contínuo: do pico ao p99 — Leandro Lima</title>
-  <meta name="description" content="Como colocar performance no ciclo com baselines, p95/p99, k6/JMeter, OpenTelemetry e SLOs como input de gate — sem depender só do load test de sexta." />
+  <title>Por que o site cai na Black Friday e o que testar antes — Leandro Lima</title>
+  <meta name="description" content="Performance com visão de risco: por que testar antes da promoção, p95, pontos de ruptura (pool, lock, autoscaling), e por que o teste passa e o site cai na hora H." />
   <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="article.css" />
-  <link rel="stylesheet" href="../covers.css?v=8" />
+  <link rel="stylesheet" href="../covers.css?v=9" />
 </head>
 <body>
   <header class="top">
@@ -22,147 +22,143 @@
       <span class="cover__c"></span>
     </div>
     <span class="article__tag">Performance</span>
-    <h1>Performance Testing contínuo: do pico ao p99</h1>
-    <p class="article__meta">Leitura ~13 min · Quality Engineering</p>
+    <h1>Por que o site cai na Black Friday e o que testar antes</h1>
+    <p class="article__meta">Leitura ~18 min · Quality Engineering</p>
 
-    <p>Teste de carga “de projeto” — uma semana, um PDF, um número heroico de RPS — nasce morto. O modo de falha é conhecido: o relatório impressiona, ninguém amarra limiar ao pipeline, o time só descobre regressão na véspera do evento ou quando o p99 de produção já queimou SLO. Pico solto sem narrativa de jornada é ego de ferramenta.</p>
-
-    <p>Defini performance útil como hábito de ciclo: baseline versionada, tendência no PR/main, campanha pesada sob mudança estrutural ou evento, e decisão de gate em linguagem de SLO — não em “passou o script”. Ferramenta (k6, JMeter) é meio. A pergunta que manda é: <strong>qual jornada dói se degradar, e como eu detecto isso cedo com custo aceitável?</strong></p>
-
-    <div class="callout">
-      <p>Pico mostra se o sistema sobrevive. p95/p99 mostram se o usuário sofre no dia a dia. Os dois importam; medir só a média ou só o RPS máximo esconde a dor que gera ticket e churn.</p>
-    </div>
-
-    <h2>Modelo mental: pico, capacidade, stress e percentis</h2>
-
-    <h3>Quatro perguntas diferentes</h3>
-    <ol>
-      <li><strong>Capacidade:</strong> com carga alvo de negócio (ex.: Black Friday prevista), o sistema mantém SLO? Aqui importam p95/p99, erro, saturação de recurso.</li>
-      <li><strong>Stress:</strong> onde quebra e como degrada depois do ponto de ruptura? Objetivo é achar limite e modo de falha (timeout em cascata, retry storm, DC), não “passar”.</li>
-      <li><strong>Pico / spike:</strong> sobe rápido e segura? Fila, autoscaling e cache frio aparecem aqui.</li>
-      <li><strong>Regressão contínua:</strong> esta mudança piorou a jornada X em Y% contra o baseline? É o que cabe no pipeline com frequência.</li>
-    </ol>
-
-    <p>Misturar as quatro num único job chamado “perf” é o que gera limiar incoerente. Padronizei nomes e objetivos separados — mesmo que compartilhem script de jornada.</p>
-
-    <h3>Por que p99 e não só “média boa”</h3>
-    <p>A média mente quando a cauda dói. Em checkout, autenticação ou busca, uma fatia pequena de usuários no p99 pode ser exatamente a fatia de maior receita ou a que abre incidente. Uso p95 como sinal de tendência e p99 (ou SLO de latência já acordado com o negócio) como limiar de gate na jornada crítica. Erro rate e saturação (CPU, pool de conexão, fila) entram no mesmo veredito — latência sozinha sem erro pode mascarar timeout no cliente.</p>
-
-    <h2>Contínuo no pipeline versus load test de sexta</h2>
-
-    <p>O contínuo não substitui o stress extremo; evita surpresas bobas. A campanha pesada não substitui o contínuo; valida hipótese de capacidade que o PR nunca vai exercer.</p>
-
-    <ul>
-      <li><strong>No PR / main (leve):</strong> mesma jornada, carga modesta, comparação com baseline da mesma versão de script e perfil. Orçamento: minutos, não horas. Objetivo: regressão relativa (ex.: p99 +20% ou violação de budget de latência).</li>
-      <li><strong>Noturno / sob mudança de arquitetura:</strong> carga média-alta, mais cenários, talvez multi-região.</li>
-      <li><strong>Pré-evento / release maior:</strong> capacidade e stress com premissas de tráfego do negócio; ambiente dimensionado de forma honesta — ou limites explicitamente declarados.</li>
-    </ul>
-
-    <p>Load test só na sexta ensina o time a ter medo de sexta. Contínuo sem campanha pesada ensina confiança falsa em escala. Os dois se complementam; nenhum é cerimônia anual.</p>
-
-    <h2>Baselines que não mentem</h2>
-
-    <p>Baseline ruim é pior que ausência: bloqueia o inocente ou libera o culpado. Regras que uso:</p>
-
-    <ul>
-      <li><strong>Mesma jornada, mesmo perfil de carga, mesmo script versionado.</strong> Mudou o script? Nova baseline, não comparação silenciosa.</li>
-      <li><strong>Ambiente com limites declarados.</strong> Staging 1/10 de prod sem autoscaling não “prova” Black Friday. Pode provar regressão relativa de código — e isso já é muito se for honesto.</li>
-      <li><strong>Janela estatística mínima.</strong> Um run de 2 minutos com 50 VUs gera cauda barulhenta. Prefiro duração que estabilize p95/p99 ou aceitar só sinais grossos no PR.</li>
-      <li><strong>Excluir cold start conhecido</strong> ou medir cold start como cenário à parte. Misturar os dois polui o limiar.</li>
-      <li><strong>Guardar baseline como artefato</strong> (JSON/summary) com commit, data, versão de app e configuração de ambiente.</li>
-    </ul>
-
-    <h2>Playbook: k6, JMeter e acoplamento com OpenTelemetry</h2>
-
-    <h3>Escolha de ferramenta (pragmática)</h3>
-    <ul>
-      <li><strong>k6:</strong> forte no contínuo, scripts como código, thresholds nativos, bom para CI e jornadas HTTP/gRPC. Desenhei a maior parte dos gates leves aqui.</li>
-      <li><strong>JMeter:</strong> útil quando já há acervo, protocolos legados, ou times acostumados ao ecossistema. Pesa mais no CI; ainda serve em campanha.</li>
-      <li>Não troco ferramenta por moda se o gargalo for ausência de baseline e de telemetria — isso não se resolve com banner de vendor.</li>
-    </ul>
-
-    <h3>Acoplar carga à observabilidade</h3>
-    <p>Script verde com p99 alto sem causa é só ansiedade. Exijo, nas jornadas de gate:</p>
-    <ul>
-      <li>Trace distribuído (OpenTelemetry) com atributos de jornada (<code>journey=checkout</code>, <code>step=pay</code>).</li>
-      <li>Correlação: id de run de teste → traces/métricas do período.</li>
-      <li>Métricas RED da superfície sob teste + USE dos recursos saturáveis (pool, CPU, I/O, fila).</li>
-      <li>Evento de negócio quando existir (“pedido criado”) para não celebrar HTTP 200 com carrinho morto.</li>
-    </ul>
-
-    <p>Assim o veredito deixa de ser “k6 falhou” e vira “p99 subiu no serviço de preço; span X; pool de conexão no limite”. Qualidade e SRE leem o mesmo artefato.</p>
-
-    <h3>Runs distribuídos em cloud</h3>
-    <p>Gerador único na mesma rede do alvo mente sobre latência real e teto de carga. Para campanhas, uso geradores distribuídos (k6 cloud, cluster próprio, agents) com:</p>
-    <ul>
-      <li>Controle de ramp e limites éticos/contrato do ambiente.</li>
-      <li>Etiquetas por região de origem quando o produto é multi-region.</li>
-      <li>Cuidado com custo e com rate limit de terceiros — payment sandbox não é prod.</li>
-      <li>Isolamento: nunca “testar carga” em produção sem rituais explícitos de chaos/load aprovados. Staging mentiroso + prod sem aviso são dois jeitos de perder confiança.</li>
-    </ul>
-
-    <h2>SLOs como input de gate</h2>
-
-    <p>Padronizei a ponte assim:</p>
-    <ol>
-      <li>SLO de latência/erro da jornada crítica em produção (fonte da verdade do negócio).</li>
-      <li>Budget de regressão em teste: fração conservadora (ex.: não consumir mais que Z% do budget num único deploy) ou limiar relativo ao baseline.</li>
-      <li>Gate leve falha em regressão clara; gate de campanha falha se a premissa de capacidade do evento não segura SLO com margem.</li>
-      <li>Exceções via bypass auditado com prazo — mesmo modelo dos quality gates gerais.</li>
-    </ol>
-
-    <p>Se o produto não tem SLO, o primeiro entregável de performance não é script: é acordo de jornada e limiar. Sem isso, qualquer número no CI é opinião.</p>
-
-    <h2>Sequência de implementação</h2>
-    <ol>
-      <li>Escolher 1–2 jornadas (checkout, auth, consulta core).</li>
-      <li>Instrumentar telemetria mínima se não existir.</li>
-      <li>Escrever script determinístico + seed de dado.</li>
-      <li>Gerar baseline em ambiente declarado.</li>
-      <li>Ligar job leve em main (depois em PR se o ruído permitir).</li>
-      <li>Definir thresholds e política de flake/ruído estatístico.</li>
-      <li>Agendar campanha de capacidade/stress com premissa de negócio.</li>
-      <li>Revisar mensalmente: falsos positivos, escapes de latência, baselines obsoletas.</li>
-    </ol>
-
-    <h3>Métricas de saúde do programa de perf</h3>
-    <ul>
-      <li>% de deploys com run de regressão perf na jornada crítica.</li>
-      <li>Precision: falhas de gate que geraram otimização ou rollback consciente.</li>
-      <li>Escapes: incidentes de latência/erro onde o contínuo deveria ter sinalizado.</li>
-      <li>Tempo até causa (MTTR de diagnóstico com trace acoplado).</li>
-    </ul>
-
-    <h2>Anti-padrões</h2>
-    <ul>
-      <li>RPS máximo no slide sem jornada e sem SLO.</li>
-      <li>Gate em média/mediana escondendo cauda.</li>
-      <li>Staging “parecido com prod” tratado como capacidade real.</li>
-      <li>Script de carga sem observabilidade atrás.</li>
-      <li>Uma campanha anual no lugar de regressão contínua.</li>
-      <li>Continuar só no CI e nunca fazer stress — limite desconhecido.</li>
-      <li>Comparar baselines de scripts ou dados diferentes.</li>
-      <li>Martelar terceiro sem sandbox (pagamento, mapa, antifraude) e chamar de teste.</li>
-      <li>Limiar eterno copiado de blog (“p99 &lt; 200ms”) sem contexto de produto.</li>
-    </ul>
-
-    <h2>O que eu colocaria em produção na segunda</h2>
-    <ol>
-      <li>Nomear a jornada #1 de dor (dados de incidente ou receita) e o SLO associado — mesmo que provisório.</li>
-      <li>Publicar script k6 (ou equivalente) dessa jornada com thresholds de p95/p99 e erro.</li>
-      <li>Gerar baseline versionada no ambiente de staging com limites escritos no README do job.</li>
-      <li>Ligar job leve em main com comparação relativa; artefato summary obrigatório.</li>
-      <li>Corrigir telemetria: um <code>trace_id</code> / atributo de jornada visível no dashboard durante o run.</li>
-      <li>Separar no calendário: regressão contínua ≠ campanha de stress pré-evento.</li>
-      <li>Definir política de bypass e de ruído estatístico (quando rerun é válido).</li>
-      <li>Agendar revisão de 30 dias: falsos positivos vs escapes reais.</li>
-    </ol>
+    <p>Sábado, 10h12. Mídia no ar. Cupom estourando. O site “está no ar”, mas o pay leva quase três segundos para a maioria e uma fatia nem conclui. No Slack alguém cola o relatório de três semanas atrás: “passou no teste de carga”. Não é magia negra. Quase sempre a estratégia do teste estava errada: jornada diferente da real, massa limpa demais, ambiente generoso demais, injetor fraco ou limiar que só olhava a média.</p>
+    <p>Performance útil responde três coisas: por que gastar clock com isso, onde o sistema parte, e como preparar a execução para o resultado não mentir. Sem isso, k6 e JMeter viram PDF de consolo.</p>
 
     <div class="callout">
-      <p>Se só houver tempo para uma mudança: amarre p99 da jornada crítica a um baseline e a um trace. O PDF de carga semanal pode esperar; regressão invisível não.</p>
+      <p>Em e-commerce que vive de promoção, teste de carga antes do pico não é capricho de QA. É seguro do investimento de mídia, estoque e reputação.</p>
     </div>
 
-    <p>Prefiro um p99 chato toda semana a um relatório heróico no mês do Black Friday. Pico importa. Rotina importa mais.</p>
+    <h2>Por que testar performance: visão de risco</h2>
+    <p>Trato performance como a mesma lógica do release sob pressão: impacto, chance e o que ninguém vê cedo.</p>
+    <ul>
+      <li><strong>Impacto:</strong> conversão cai, anúncio queima, suporte explode, marca leva tiro em rede social. Em loja que concentra margem em poucas datas, isso mexe no trimestre, não só no dashboard de SRE.</li>
+      <li><strong>Probabilidade:</strong> sobe quando a mudança toca busca, carrinho, pay, cupom, frete, recomendação, cache, banco ou autoscaling. Sobe mais quando a premissa de tráfego da campanha é agressiva.</li>
+      <li><strong>Detectabilidade:</strong> média mente. Funcional verde mente. O usuário sente a cauda e o erro intermitente. Por isso olhamos percentis e taxa de erro juntos.</li>
+    </ul>
+    <p>Regra prática: se a mudança não toca caminho quente nem premissa de tráfego, não invente campanha heróica. Se a Black (ou qualquer data que paga o ano) depende desse caminho, não confie só no e2e.</p>
+
+    <h2>Datas que pagam o ano</h2>
+    <p>Black Friday, Cyber, Natal, aniversário da marca: para muitos e-commerces não são “mais um deploy”. São a janela em que marketing, comercial e operação já investiram. Cada real de mídia assume que o site converte. Site lento ou instável nessa janela não é só incidente técnico. É ROI queimado.</p>
+    <p>Por isso carga e stress entram no calendário de negócio, junto com estoque e campanha:</p>
+    <ul>
+      <li><strong>Carga / capacidade:</strong> com a premissa de tráfego da campanha, o sistema mantém tempo e erro aceitáveis?</li>
+      <li><strong>Stress:</strong> passa um pouco do alvo. Onde rompe? Como degrada depois? Timeout em cascata ou queda elegante?</li>
+    </ul>
+    <p>Achar o limite na terça ainda permite scale, cache, desligar módulo caro, ajustar fila. Achar no sábado com mídia no ar é apagar incêndio com cartão de crédito do marketing já gasto.</p>
+    <p>Mitigação de risco, em linguagem de investimento: você não “garante zero falha”. Você reduz a chance de queimar a campanha sem evidência. Go/no-go de negócio: se não há evidência de capacidade com margem, subir a mídia é aposta, não plano.</p>
+
+    <h2>O que olhar: p95 primeiro</h2>
+    <p>No dia a dia eu opero com <strong>p95</strong>: 95 em cada 100 requests abaixo daquele tempo. É o número que conversa com a maioria dos usuários sem se apegar à média (que esconde dor) nem viver só de p99 (útil, mas mais barulhento e às vezes excessivo no gate leve).</p>
+    <p>Uso assim:</p>
+    <ul>
+      <li><strong>p95 + taxa de erro:</strong> limiar padrão de regressão e de campanha na jornada crítica.</li>
+      <li><strong>p99:</strong> quando a cauda já gerou incidente, ou a fatia lenta é justamente a de maior ticket, ou o SLO do negócio já está escrito assim.</li>
+      <li><strong>Saturação:</strong> CPU, memória, pool, fila, threads. Latência sozinha sem isso vira achismo.</li>
+    </ul>
+    <p>Exemplo: 10.000 checkouts no teste. p95 = 900 ms (ok para o acordo). p99 = 3 s. Isso são cerca de 100 compras na cauda sofrendo. Em pay, “média boa” não consola o financeiro.</p>
+
+    <h2>Quatro testes, quatro perguntas</h2>
+    <p>Misturar tudo num job chamado “perf” gera limiar incoerente. Separe:</p>
+    <ol>
+      <li><strong>Regressão contínua</strong> (PR/main): esta mudança piorou a jornada? Carga modesta, comparação com baseline.</li>
+      <li><strong>Capacidade:</strong> aguenta a premissa da campanha?</li>
+      <li><strong>Stress:</strong> onde é o ponto de ruptura e qual o modo de falha?</li>
+      <li><strong>Spike:</strong> sobe rápido; cache frio e autoscaling aguentam o tombo?</li>
+    </ol>
+    <p>O contínuo não substitui o stress da Black. O stress da Black não substitui o contínuo. Um pega regressão de código barata; o outro valida hipótese de negócio cara.</p>
+
+    <h2>Onde o sistema costuma partir</h2>
+
+    <h3>Pool de conexões</h3>
+    <p>Banco, Redis ou outro serviço só aceita um número limitado de conexões ao mesmo tempo. Sob pico o app pede mais do que o pool tem. As requests esperam. O p95 sobe. Se estoura o tempo, o usuário vê erro mesmo com CPU “tranquila”.</p>
+    <p><strong>No teste:</strong> suba concorrência de verdade e olhe conexões ativas, waiting e p95 juntos.</p>
+    <p><strong>Sinal:</strong> tempo sobe, app não está a 100% de CPU, banco em max connections ou fila de espera.</p>
+    <p><strong>Mitigação:</strong> dimensionar pool com teto consciente, timeout curto, não abrir conexão sem limite, circuit breaker. “Pool maior” sem teto no banco só empurra o problema.</p>
+
+    <h3>Locks</h3>
+    <p>Dois mil usuários batem no mesmo SKU, no mesmo cupom ou na mesma reserva de estoque. Um segura a trava; os outros esperam. Em terça à tarde quase não aparece. No horário da promoção vira fila invisível: checkout lento ou timeout.</p>
+    <p><strong>No teste:</strong> cenário concorrente no mesmo recurso quente, não só usuários em produtos diferentes com massa “espalhada e feliz”.</p>
+    <p><strong>Sinal:</strong> poucos endpoints doem; waits/locks no banco; trace longo no mesmo registro.</p>
+    <p><strong>Mitigação:</strong> menos lock pessimista no caminho quente, reserva com prazo, fila, abordagem otimista quando fizer sentido.</p>
+
+    <h3>Autoscaling mal configurado</h3>
+    <p>O sistema “sobe sozinho”, mas sobe tarde, sobe frio ou sobe a peça errada:</p>
+    <ul>
+      <li>escala por CPU enquanto o gargalo é fila ou banco;</li>
+      <li>nova instância sobe sem cache quente e piora o pico;</li>
+      <li>sobe app e não sobe limite de conexão, worker ou terceiro;</li>
+      <li>sobe sem teto e estoura a conta sem curar a causa.</li>
+    </ul>
+    <p><strong>No teste:</strong> spike + observar se o scale entra a tempo e se o p95 melhora ou piora nos primeiros minutos.</p>
+    <p><strong>Sinal:</strong> erro no começo do pico; mais réplicas, mesma dor.</p>
+    <p><strong>Mitigação:</strong> escalar por latência/fila também, warm-up, pré-scale antes da campanha, tratar o gargalo real.</p>
+
+    <h3>Outros clássicos</h3>
+    <ul>
+      <li><strong>Retry storm:</strong> downstream lento; o app insiste; a fila explode.</li>
+      <li><strong>Cache frio</strong> pós-deploy ou scale-out.</li>
+      <li><strong>Query N+1</strong> ou lock que só aparece sob concorrência.</li>
+      <li><strong>Terceiro</strong> (PSP, frete, antifraude) no rate limit: seu “site” parece culpado.</li>
+    </ul>
+
+    <h2>Por que passa no teste e cai na hora H</h2>
+    <p>Esse é o fracasso mais caro: relatório verde, promoção vermelha. Quase nunca é “o k6 bugou”. É preparação e estratégia erradas.</p>
+
+    <h3>Jornada errada</h3>
+    <p>O teste martela um GET de health ou um login limpo. O usuário real faz busca com typo, aplica dois cupons, muda frete, falha o PIX e tenta de novo. Se a jornada do script não parece a jornada que gera receita, o verde não significa nada.</p>
+
+    <h3>Massa errada</h3>
+    <p>Base com produtos sem estoque conflituoso, cupom sem disputa, usuários perfeitos, dados quentes no cache. Na Black todo mundo cai no mesmo hero SKU. Sem massa que force concorrência e dado “sujo” de verdade, você não acorda lock nem pool.</p>
+
+    <h3>Ambiente mentiroso</h3>
+    <p>Staging com banco maior que o necessário, sem rate limit de terceiro, sem a mesma regra de autoscaling, com cache eternamente quente. Ele aguenta o script. Produção, com limite real e cold start, não. Declare o que o ambiente prova: regressão de código, não capacidade de Black, se for o caso. Mentira educada ainda é mentira.</p>
+
+    <h3>Injetor fraco ou mal colocado</h3>
+    <p>Um gerador na mesma rede do alvo, máquina pequena, ou cloud que satura antes do sistema. Você mede o teto do injetor, não o do site. Para campanha séria: geradores distribuídos, ramp controlado, e checagem de que o gerador não é o gargalo.</p>
+
+    <h3>Limiar egóico</h3>
+    <p>“Passou” porque a média ficou bonita, ou porque o erro ficou abaixo de um número copiado de blog. Sem p95 da jornada crítica + erro + olho na saturação, o gate aplaude o errado.</p>
+
+    <h3>Estratégia só de feliz</h3>
+    <p>Só happy path, sem spike, sem stress além do alvo, sem falha de dependency. A promoção traz exatamente o que você não ensaiou: subida brusca, cache frio, PSP lento, retry.</p>
+
+    <p>Checklist mental antes de confiar no verde: a jornada é a de receita? A massa disputa recurso? O ambiente declara limites? O injetor não satura primeiro? O limiar é p95/erro da jornada? Tem stress e spike, não só carga confortável?</p>
+
+    <h2>Como preparar a execução</h2>
+    <ol>
+      <li><strong>Premissa escrita:</strong> sessões, checkout por minuto, mix mobile, regiões, features ligadas. Sem número de negócio, qualquer RPS é teatro.</li>
+      <li><strong>Jornadas prioritárias:</strong> busca → PDP → carrinho → pay. Mais o que mais gera receita ou ticket.</li>
+      <li><strong>Massa com conflito:</strong> SKUs quentes, cupom disputado, estoque no limite, retry de pagamento.</li>
+      <li><strong>Ambiente honesto:</strong> ou parece prod nos limites que importam, ou o relatório diz “só regressão relativa”.</li>
+      <li><strong>Injetor dimensionado:</strong> prova de que ele não é o gargalo; preferir origem distribuída na campanha.</li>
+      <li><strong>Observabilidade ligada:</strong> durante o run, trace da jornada, pool, fila, scale. Verde sem causa é ansiedade.</li>
+      <li><strong>Plano se falhar:</strong> flag off, pré-scale, warm cache, degradar busca, teto de anúncio. Teste sem plano de mitigação só gera medo.</li>
+    </ol>
+
+    <h2>Contínuo no ciclo e campanha no calendário</h2>
+    <p><strong>No pipeline:</strong> mesma jornada, carga leve, baseline versionada, limiar de regressão em p95 e erro. Minutos, não horas. Objetivo: pegar o PR que deixou o pay mais lento.</p>
+    <p><strong>Antes da data que paga o ano:</strong> capacidade com a premissa + stress além do alvo + spike. Com tempo no calendário para corrigir. Rerun na semana do evento se a build mudou.</p>
+    <p>Ferramenta: k6 ou JMeter são meio. O que manda é a pergunta e a honestidade da preparação. Eu privilégio script como código no contínuo; campanha pode reusar o mesmo script com perfil de carga diferente.</p>
+
+    <h2>Quando o programa de perf só parece maduro</h2>
+    <p>RPS máximo no slide sem jornada. Média no lugar de p95. Staging tratado como prova de Black. Script sem telemetria. Uma campanha anual e zero regressão no ciclo. Continuar só no CI e nunca achar o ponto de ruptura. Comparar baselines de script ou massa diferentes. Martelar PSP real. Limiar eterno copiado da internet. Relatório verde com jornada de mentira.</p>
+
+    <h2>Se a Black é daqui a três semanas</h2>
+    <ol>
+      <li>Escreva a premissa de tráfego com marketing e produto numa página só.</li>
+      <li>Fixe as jornadas de receita e o acordo de p95 + erro.</li>
+      <li>Prepare massa que dispute SKU, cupom e estoque.</li>
+      <li>Rode capacidade com margem; depois stress até achar ruptura; anote pool, lock, scale.</li>
+      <li>Faça um spike e veja cold start e autoscaling.</li>
+      <li>Liste mitigações se o número não fechar; leve o go/no-go para quem gasta a mídia.</li>
+      <li>No ciclo normal, mantenha a mesma jornada em regressão leve para o próximo PR não desfazer o que a campanha validou.</li>
+    </ol>
+
+    <p>Site no ar não basta. Site que converte no pico basta. Isso se ensaia antes, com jornada real, massa cruel e limiar que o negócio entende. O PDF heróico depois do prejuízo não mitiga risco. Só documenta o óbvio.</p>
 
     <div class="article__foot">
       <a href="../index.html#artigos">← Voltar aos artigos</a>
