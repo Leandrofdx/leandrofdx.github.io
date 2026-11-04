@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Automação web que não vira dívida — Leandro Lima</title>
-  <meta name="description" content="E2E web com disciplina de staff: quatro filtros antes de automatizar, taxonomia de flake com orçamento, Page Object leve, seleção no CI e quando matar cenário sem culpa." />
+  <meta name="description" content="Automação E2E web com visão de risco: quatro filtros antes de automatizar, o que vai abaixo da UI, Page Object leve, contrato de seletor, taxonomia de flake com orçamento, tiers de CI, sinais de suíte doente e um plano de poda em uma sprint." />
   <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="article.css" />
   <link rel="stylesheet" href="../covers.css?v=11" />
@@ -25,99 +25,178 @@
     <h1>Automação web que não vira dívida</h1>
     <p class="article__meta">Leitura ~18 min · Quality Engineering</p>
 
-    <p>Terça, 11h20. O smoke de merge leva 27 minutos. Dos últimos 40 runs, 9 falharam: 22,5%. Seis foram “elemento não encontrado” no botão que o design moveu duas sprints atrás. Dois foram usuário de teste com carrinho sujo. Um foi bug real de frete. O time já normalizou o ritual: rerun, rerun, merge. Produto parou de olhar o vermelho. Em seis meses a suíte passou de 38 para 140 e2es. A taxa de escape em checkout não caiu. Subiu de 1,2% para 1,8% dos deploys.</p>
-    <p>Não faltou Cypress. Faltou filtro. Qualidade de software que protege o produto não é volume de Page Object. É sinal crível no caminho que dói, com custo que o CI aguenta pagar toda hora.</p>
+    <p>Em janeiro a suíte E2E tinha 140 testes e rodava em 9 minutos no PR. Em setembro tinha 420 e rodava em 47. A taxa de PRs verdes na primeira tentativa tinha caído de 96% para 71%. O time abria uns 60 PRs por dia; 29% deles, cerca de 17, precisavam de pelo menos um rerun. Cada rerun era mais 47 minutos de espera. Dá umas 13 horas de engenharia por dia olhando um job rodar de novo. A R$ 150 a hora, perto de R$ 39 mil por mês em espera, sem contar o custo das máquinas de CI.</p>
+    <p>O pior não era o dinheiro. Em agosto, um bug no PIX que duplicava cobrança em retry chegou à produção. O teste que pegaria aquilo existia. Estava na lista de “mutados temporariamente” havia 34 dias, porque falhava “por flake” uma vez a cada cinco runs. Ninguém tinha olhado por quê. A falha intermitente era o próprio bug: uma condição de corrida no retry.</p>
+    <p>A suíte cresceu três vezes. A confiança nela caiu. Quando cheguei, a primeira coisa que fiz não foi escrever teste. Foi apagar.</p>
 
     <div class="callout">
-      <p>E2E que só existe para “aumentar cobertura” é imposto sobre cada PR futuro. Cobrança sem retorno.</p>
+      <p>Uma suíte em que ninguém confia não é rede de segurança: é um custo fixo que treina o time a ignorar vermelho.</p>
     </div>
 
-    <h2>O que o e2e responde (e o que não)</h2>
-    <p>Antes da ferramenta: a pergunta. E2E na UI responde: “a orquestração da jornada ainda entrega o efeito de negócio que o usuário vê?” Login → busca → carrinho → pay → confirmação. Não responde bem: regra de validação de CPF, arredondamento de juros, política de desconto isolada, shape de JSON entre serviços. Isso é unitário, API ou contrato. Se o e2e é a única rede, você paga flake para retestar o que já tinha prova barata.</p>
-
-    <h2>Visão de risco na suíte</h2>
-    <p>Mesma lógica de release: impacto × probabilidade × detectabilidade.</p>
+    <h2>As palavras antes da conversa</h2>
+    <p>Alguns termos aparecem o tempo todo neste assunto e quase nunca são definidos. Fixo o que cada um quer dizer aqui.</p>
     <ul>
-      <li><strong>Impacto alto</strong> no caminho de dinheiro, auth, PII, onboarding de receita: se a orquestração quebrar e só a UI pegar, o e2e fica.</li>
-      <li><strong>Probabilidade</strong> sobe com refactor de front no fluxo quente, feature flag nova, terceiro no meio da jornada.</li>
-      <li><strong>Detectabilidade</strong>: se contrato e API já pegam a quebra, duplicar na UI é vaidade cara. Se a quebra é “botão some depois do redirect do PSP”, só o e2e (ou exploração) vê.</li>
+      <li><strong>E2E web:</strong> teste que abre um browser de verdade, navega como usuário e passa por front, BFF e serviços reais (ou quase reais). Prova que as peças conversam. É o teste mais caro de escrever, rodar e manter.</li>
+      <li><strong>Camadas abaixo da UI:</strong> <em>unitário</em> (uma função ou classe, sem rede, milissegundos), <em>componente</em> (um componente de front renderizado isolado, ou um serviço com dependências simuladas), <em>contrato</em> (verifica que quem chama e quem responde concordam no formato da API) e <em>API</em> (request real contra o serviço, sem browser).</li>
+      <li><strong>Flake:</strong> teste que dá resultados diferentes com o mesmo código e o mesmo ambiente declarado. Atenção ao “declarado”: muitas vezes o ambiente não é o mesmo, só parece.</li>
+      <li><strong>Determinismo:</strong> o teste controla tudo de que depende. Dado criado por ele, relógio controlado quando importa, nenhuma dependência de ordem com outros testes.</li>
+      <li><strong>Seletor:</strong> a forma como o teste encontra um elemento na página. Pode ser classe CSS, texto, papel de acessibilidade ou atributo de teste.</li>
+      <li><strong>Quarentena:</strong> teste retirado do gate de merge, ainda rodando e reportando, com dono e prazo. Diferente de “mutado”, que é teste desligado e esquecido.</li>
+      <li><strong>Tier:</strong> nível de seleção no CI. Qual subconjunto roda em qual momento (PR, merge, noite).</li>
     </ul>
-    <p>Empate: privilegio impacto irreversível. Banner da home perde para pay. Sempre.</p>
+
+    <h2>Visão de risco: quem merece um E2E</h2>
+    <p>Decido o que entra na UI com a mesma conta que uso para qualquer decisão de teste: <strong>impacto × probabilidade × detectabilidade</strong>, de 1 a 5 cada. Detectabilidade aqui é específica: quão mal <em>as outras camadas</em> pegam essa falha. Se o contrato ou o unitário já pegam, a detectabilidade é baixa e o E2E agrega pouco.</p>
+    <p>Três cenários reais da suíte de setembro:</p>
+    <ul>
+      <li><strong>Checkout com PIX e retry:</strong> impacto 5 (dinheiro, cobrança duplicada), probabilidade 4 (fluxo mexido toda sprint), detectabilidade 4 (a falha é de orquestração entre front, BFF e PSP; nenhuma camada isolada vê). 5 × 4 × 4 = 80. E2E obrigatório, no tier de PR.</li>
+      <li><strong>Cálculo de desconto progressivo do cupom:</strong> impacto 4, probabilidade 4, detectabilidade 2 (é uma função pura; unitário pega com precisão). 4 × 4 × 2 = 32. Unitário com tabela de casos, mais um único E2E que confirma que o desconto aparece no total.</li>
+      <li><strong>Banner de campanha na home:</strong> impacto 1, probabilidade 5 (muda toda semana), detectabilidade 1 (qualquer pessoa vê). 1 × 5 × 1 = 5. Fora da automação.</li>
+    </ul>
+    <p>Meu corte prático: acima de 50, E2E é candidato forte. Entre 20 e 50, procuro a camada mais barata que pegue a falha. Abaixo de 20, não automatizo; se doer, vai para checklist exploratório da release. Os números não são ciência exata. Servem para forçar a conversa a sair de “a história pediu um E2E”.</p>
 
     <h2>Quatro filtros antes de abrir o arquivo</h2>
-    <p>Se falhar em dois, não automatizo na UI. Documento o gap e cubro em outra camada ou checklist curto com dono.</p>
+    <p>Mesmo com score alto, o cenário passa por quatro filtros. Se falha em dois, não vai para a UI. Documento o gap e cubro em outra camada.</p>
+
+    <h3>1. Valor de regressão</h3>
+    <p>Pergunta: isso quebra com frequência ou dói caro quando quebra? Olho o histórico: incidentes dos últimos 12 meses, bugs reabertos, áreas com mais commits. Checkout, autenticação, onboarding que gera receita passam fácil. Tela de configuração de perfil usada por 2% dos usuários raramente passa.</p>
+
+    <h3>2. Estabilidade de intenção</h3>
+    <p>Pergunta: a intenção do usuário sobrevive ao próximo experimento de UX? “Comprar com PIX” sobrevive a três redesigns. “Clicar no segundo card do carrossel” não sobrevive a um. Se o layout muda toda semana, automatizar a tela é pagar a manutenção do time de design com hora de QA.</p>
+
+    <h3>3. Determinismo possível</h3>
+    <p>Pergunta: eu consigo controlar o dado e o estado? Se o cenário depende de estoque compartilhado, de usuário fixo que outro teste também usa, ou de um sandbox de terceiro que cai duas vezes por dia, ele nasce flake. Primeiro resolvo a massa (API de seed, usuário criado por teste, mock do terceiro no nível de rede). Se não dá, não automatizo ainda.</p>
+
+    <h3>4. Custo no CI</h3>
+    <p>Pergunta: quanto esse teste vai cobrar de todo mundo? Faço a conta antes de escrever. Um E2E de 90 segundos no tier de PR, com 60 PRs por dia, consome 90 minutos de máquina por dia. Se ele flaka 1% das vezes, gera 0,6 rerun por dia, cada um repetindo a suíte inteira. E ainda tem manutenção: pela minha média, umas 2 horas por mês por E2E de jornada, entre ajuste de seletor, massa e investigação. Um teste que não pega bug há seis meses e custa isso tudo é candidato a sair.</p>
+
+    <h2>O que mora abaixo da UI</h2>
+    <p>A maior fonte de inchaço que encontro é regra de negócio testada pelo browser. O E2E vira uma tabela de casos disfarçada, cada linha abrindo o browser, logando, montando carrinho.</p>
+    <p>Exemplo da suíte que herdei: 14 E2E de validação de CEP (formato, CEP inexistente, área sem entrega, CEP rural com prazo estendido...). Cada um levava uns 25 segundos. Total: quase 6 minutos. Os mesmos 14 casos como teste de API contra o serviço de frete: uns 40 ms cada, menos de 1 segundo no total, sem browser, sem login, sem flake de renderização. Ficou um E2E: digitar um CEP válido e ver o frete no resumo do pedido. Esse prova a integração. Os outros provavam a regra, e a regra não precisa de browser.</p>
+    <p>O que eu empurro para baixo, sempre:</p>
+    <ul>
+      <li><strong>Regra e cálculo:</strong> desconto, frete, imposto, juros, arredondamento. Unitário com tabela de casos.</li>
+      <li><strong>Validação de campo:</strong> formato, obrigatoriedade, limite. Componente ou API.</li>
+      <li><strong>Política e permissão:</strong> quem pode ver o quê. API com usuários de perfis diferentes.</li>
+      <li><strong>Formato de payload:</strong> contrato entre front e BFF, e entre BFF e serviços.</li>
+      <li><strong>Máquina de estados:</strong> pedido criado, pago, enviado, cancelado. Transições válidas e inválidas testadas no serviço.</li>
+      <li><strong>Erro de dependência:</strong> PSP devolve 503, antifraude demora 8 s. Simulado no nível de API ou componente, onde o controle é total.</li>
+    </ul>
+    <p>O que fica no E2E: caminho principal das jornadas críticas, mais um ou dois cenários de erro que já viraram incidente e que só aparecem na orquestração (o retry do PIX é o exemplo perfeito). A proporção que costumo ver em suítes saudáveis é algo como 1 E2E para 10 de API e 50 unitários na mesma área. Quando a suíte inverte isso, ela está pagando caro por cobertura que poderia ser barata.</p>
+
+    <h2>Page Object leve, não um segundo frontend</h2>
+    <p><strong>Page Object</strong> é um padrão em que cada página ou parte da página vira um objeto no código de teste, escondendo os seletores e expondo ações com nome de intenção. O teste chama <code>checkout.payWithPix()</code> em vez de procurar três botões.</p>
+    <p>O padrão é bom. O que estraga é o exagero. Os anti-padrões que mais encontro:</p>
+    <ul>
+      <li><strong>God Page:</strong> uma classe <code>CheckoutPage</code> com 60 métodos, de <code>clickBlueButton</code> a <code>validateAllFieldsAndSubmitAndWaitForSuccess</code>. Ninguém sabe o que ela faz por inteiro; todo mundo tem medo de mexer.</li>
+      <li><strong>Wait escondido:</strong> método que, por dentro, faz <code>sleep(3000)</code> “porque às vezes demora”. Multiplique por 40 chamadas por teste e você tem 2 minutos de espera inútil, além de flake quando 3 s não bastam.</li>
+      <li><strong>Assert dentro do objeto:</strong> o Page Object decide o que é sucesso. O teste fica sem assert visível e quem lê não sabe o que está sendo verificado.</li>
+      <li><strong>Espelho do DOM:</strong> um método por elemento da página. Isso não é abstração; é o HTML reescrito em outra linguagem, e quebra junto com ele.</li>
+    </ul>
+    <p>O que desenhei para os times em que trabalhei:</p>
     <ol>
-      <li><strong>Valor de regressão:</strong> quebra com frequência ou dói caro? Checkout, auth, onboarding. Banner de marketing raramente passa.</li>
-      <li><strong>Estabilidade de intenção:</strong> a jornada de negócio sobrevive ao experimento de UX? Layout que muda toda semana não merece seletor cosmétique.</li>
-      <li><strong>Determinismo:</strong> seed, isolamento, reset. Sem isso é esperança automatizada.</li>
-      <li><strong>Custo no CI:</strong> cada e2e cobra minutos e investigação em todo PR, não só no do autor. 3 minutos × 40 PRs/dia = 2 horas de agente por dia por cenário. Multiplique.</li>
+      <li><strong>Objetos por fragmento, não por página.</strong> <code>CartSummary</code>, <code>PaymentForm</code>, <code>AddressPicker</code>. Fragmentos são reutilizados entre páginas e mudam menos.</li>
+      <li><strong>Métodos com intenção de usuário.</strong> <code>applyCoupon(code)</code>, <code>chooseShipping("expressa")</code>. Se o nome do método descreve um clique, está baixo demais.</li>
+      <li><strong>Nenhum sleep.</strong> Espera é sempre por condição: elemento visível, request concluída, texto presente. Ferramentas como Playwright já esperam por padrão nas ações; o resto é <code>expect</code> com timeout explícito.</li>
+      <li><strong>Assert no teste.</strong> O objeto expõe leitura (<code>cartSummary.total()</code>); o teste decide se está certo.</li>
+      <li><strong>Limite de tamanho.</strong> Fragmento com mais de 15 métodos é sinal de que mistura duas coisas. Divido.</li>
     </ol>
 
-    <h3>Decisão prática com números</h3>
-    <p>História pede e2e para “campo de cupom rejeita código expirado”. Unitário do validador já cobre. API do promo service já cobre. Na UI: A/B mexe o formulário a cada quinzena. Filtros 2 e 4 falham. Não abro arquivo. Aceite: caso manual na primeira release da flag + unitário verde.</p>
-    <p>Outra história: “após 3D Secure, o pedido precisa aparecer como pago sem refresh”. Orquestração, redirect, estado. Contrato não vê. Unitário não vê. Filtros 1 e 3 passam se eu tiver seed de pagamento sandbox. Aí sim: um e2e, não cinco variações de bandeira.</p>
-
-    <h2>Onde cada coisa mora</h2>
+    <h2>Contrato de seletor com o time de front</h2>
+    <p>Metade das falhas “de seletor” que já classifiquei vinha de um mesmo lugar: teste preso a algo que o front considera detalhe de implementação. Classe CSS gerada pelo bundler (<code>.btn_x7f2a</code>), posição no DOM (<code>div:nth-child(3) &gt; button</code>), texto de marketing que muda por campanha.</p>
+    <p>A solução não é técnica; é um acordo. Escrevi com o front um contrato de seletor de uma página com esta ordem de preferência:</p>
+    <ol>
+      <li><strong>Papel e nome acessível:</strong> <code>getByRole('button', { name: 'Finalizar compra' })</code>. É o que um leitor de tela usa. Se quebra, provavelmente quebrou a acessibilidade também, e isso é bug.</li>
+      <li><strong>Rótulo de formulário:</strong> <code>getByLabel('CEP')</code>.</li>
+      <li><strong>Atributo de teste:</strong> <code>data-testid="checkout-submit"</code>, quando papel e rótulo não identificam de forma única (listas, cards repetidos, elementos sem texto).</li>
+      <li><strong>Proibido:</strong> classe CSS, XPath posicional, texto de campanha.</li>
+    </ol>
+    <p>E as regras do contrato:</p>
     <ul>
-      <li><strong>E2E:</strong> caminho feliz das jornadas críticas; um ou dois erros que já geraram incidente (pay falhou e retry; estoque zerou no meio).</li>
-      <li><strong>Abaixo da UI:</strong> regra, cálculo, política, contrato de API, máquina de estados, permissão.</li>
-      <li><strong>Ainda não / nunca na UI:</strong> captcha, animação, CMS volátil, pixel-perfect, “para o número de cobertura ficar bonito”.</li>
+      <li>Nome de <code>data-testid</code> segue o padrão <code>área-elemento-ação</code>, em inglês e minúsculas.</li>
+      <li>Remover ou renomear um <code>data-testid</code> é mudança que quebra contrato: o PR do front precisa marcar QA na revisão.</li>
+      <li>Uma regra de lint no repositório de testes recusa seletor por classe CSS.</li>
+      <li>Componente novo de design system já nasce com papel e nome acessível corretos. O ganho de acessibilidade veio de brinde.</li>
+    </ul>
+    <p>Depois do contrato, as falhas classificadas como “seletor” caíram de 38% para 9% das falhas não-produto em dois meses.</p>
+
+    <h2>Taxonomia de flake, com orçamento</h2>
+    <p>Rerun sem causa treina o time a ignorar vermelho. Antes de qualquer rerun na suíte crítica, a falha é classificada numa destas caixas:</p>
+    <ul>
+      <li><strong>Dado:</strong> usuário compartilhado, estoque consumido por outro teste, estado sujo de execução anterior. Sinal: falha some quando o teste roda sozinho.</li>
+      <li><strong>Ordem e isolamento:</strong> teste B depende de algo que A deixou. Sinal: falha só com paralelismo ou ordem aleatória.</li>
+      <li><strong>Timing e seletor:</strong> animação, elemento que re-renderiza, espera por tempo fixo. Sinal: falha em máquina lenta, passa na rápida.</li>
+      <li><strong>Ambiente:</strong> deploy no meio do run, serviço de staging reiniciando, recurso saturado por outro time. Sinal: várias suítes falham ao mesmo tempo.</li>
+      <li><strong>Dependência externa:</strong> sandbox do PSP, serviço de CEP público. Sinal: erro ou lentidão no hop de terceiro.</li>
+      <li><strong>Infra do runner:</strong> falta de memória no container, browser que trava. Sinal: falha antes de qualquer request sair.</li>
+      <li><strong>Produto:</strong> o sistema realmente se comporta de forma intermitente. Condição de corrida, cache inconsistente, retry duplicado. <em>Isso não é flake. É bug.</em> E é exatamente o que o mute esconde, como no PIX de agosto.</li>
     </ul>
 
-    <h2>Page Object leve, não segundo frontend</h2>
-    <p>Classe com 40 métodos e wait escondido vira produto paralelo. Teste procedural de 200 linhas explode no redesign. No meio que eu uso: fragments por intenção (<code>cart.submitOrder()</code>), seletor estável atrás da intenção, assert de negócio no teste. O teste diz o que importa; a page diz como achar.</p>
-    <p><strong>Seletor:</strong> papel/acessibilidade (<code>getByRole('button', { name: 'Pagar' })</code>) ou <code>data-testid</code> de contrato com o front. Classe CSS de tema e XPath absoluto são dívida programada. Contrato escrito: front não remove testid de jornada crítica sem PR coordenado. Sem contrato, cada redesign é massacre silencioso.</p>
+    <h3>Por que flake pequeno vira suíte vermelha</h3>
+    <p>A conta que mais convence gestor: flake se multiplica. Suponha uma suíte de 120 testes em que cada um, isoladamente, flaka só 0,5% das vezes. A chance de um run inteiro passar é 0,995 elevado a 120. Na mão: o logaritmo de 0,995 é cerca de −0,005; vezes 120 dá −0,6; e elevado a −0,6 dá uns 0,55. Ou seja, 45% dos runs ficam vermelhos <em>sem nenhum bug</em>, com testes que individualmente parecem ótimos.</p>
+    <p>Para a suíte inteira ter 95% de runs verdes com 120 testes, cada teste precisa flakar menos de 0,04%. Um em 2.500 execuções. É por isso que o tier de PR precisa ser pequeno: com 20 testes a 0,5%, o run verde sobe para 0,995 elevado a 20, cerca de 90%.</p>
 
-    <h2>Flake: taxonomia antes do rerun</h2>
-    <p>Rerun sem causa treina o time a ignorar vermelho. Classifico em quatro baldes. Todo vermelho ganha um, ou fica bloqueando merge até classificar.</p>
+    <h3>O orçamento</h3>
+    <p>Defino orçamento de falha não-produto por tier, medido numa janela de 7 dias:</p>
     <ul>
-      <li><strong>Dado:</strong> conflito de usuário, estoque, estado sujo entre jobs.</li>
-      <li><strong>Ambiente:</strong> dependência fora, deploy no meio do run, staging disputado.</li>
-      <li><strong>Seletor/timing:</strong> animação, race, wait frágil, seletor cosmétique.</li>
-      <li><strong>Produto real:</strong> bug. Não é flake. Não mute.</li>
+      <li><strong>Tier de PR:</strong> no máximo 2% dos runs vermelhos por causa não-produto.</li>
+      <li><strong>Suíte completa pós-merge:</strong> no máximo 5%.</li>
     </ul>
-
-    <h3>Orçamento que eu opero</h3>
-    <p>Smoke crítico: no máximo 5% de falha por causa não-produto em janela de 7 dias. Conta: 40 runs/dia × 7 = 280. Teto = 14 falhas “rede/seletor/dado”. Acima disso, congelo cenário novo e pago a dívida. Sem orçamento, a suíte só engorda o ruído.</p>
-    <p>Exemplo realista: 9 falhas em 40 runs (22,5%). Destas, 6 seletor, 2 dado, 1 produto. Você não tem “CI instável”. Tem 8 débitos de plataforma e 1 bug. Trate cada um no balde certo. O rerun único esconde a proporção.</p>
+    <p>Exemplo da semana em que medi pela primeira vez: o tier de PR rodou 40 vezes por dia, 280 runs na semana. 42 runs vermelhos. Classificados: 6 eram produto (bug real), 36 não-produto. 36 / 280 = 12,9%. Mais de seis vezes o orçamento. A distribuição: 15 de dado, 11 de seletor e timing, 7 de ambiente, 3 de terceiro.</p>
+    <p>Regra que acompanha o orçamento: <strong>se o tier estoura, para de entrar E2E novo nele</strong> até voltar ao limite. Não é punição; é a mesma lógica de error budget de SRE. Você gastou a confiança disponível, então a próxima sprint paga dívida.</p>
+    <p>E a regra de quarentena: teste que flaka acima de 2% em 7 dias sai do gate, continua rodando, ganha dono nomeado e 10 dias úteis. No fim do prazo, ou está corrigido e volta, ou é apagado. Nunca fica no limbo. O teste do PIX teria sido investigado no dia 10, não esquecido no dia 34.</p>
 
     <h2>Seleção no CI: quem paga a conta</h2>
-    <p><strong>Smoke no PR:</strong> minutos, jornadas irreversíveis, Tier de browser mínimo (um Chromium fresco costuma bastar no PR).</p>
-    <p><strong>Full / profunda:</strong> main, RC, ou tag quando o diff toca pagamento, auth, checkout. Matriz eterna de browser no PR é vaidade: 3 browsers × 20 min = 1h de sinal atrasado para pegar o que um smoke + contrato já pegariam.</p>
-    <p>Seleção dinâmica por path do diff ajuda, mas só se a classificação de risco do path for honesta. “Tocou CSS” não isenta se o CSS está no botão de pagar via design system compartilhado.</p>
-
-    <h3>Conta do pipeline</h3>
-    <p>Smoke de 8 minutos, 50 PRs/dia: ~6,5 horas de agente por dia só de smoke. Se 20% falha e pede rerun, some mais ~1,3h. Se a investigação média de um vermelho ilegível leva 25 minutos de engenheiro e isso acontece 8 vezes/dia, são ~3h de gente. Flake não é “incômodo de CI”. É orçamento queimado. Por isso eu corto cenário antes de pedir mais runners.</p>
-
-    <h2>Dado e isolamento (onde a maioria sangra)</h2>
-    <p>Usuário compartilhado entre jobs paralelos: um limpa o carrinho do outro. SKU com estoque 1: dois testes brigam. Clock de cupom expirando no meio do run. Sem seed por execução (API de setup, factory, ou snapshot resetável), o e2e testa a loteria do staging, não o produto.</p>
-    <p>Padrão que eu exijo: criar dado no before com id único; tear down best-effort; nunca depender de “estado que alguém deixou ontem”. Se o setup precisa de 15 cliques de UI, o teste está testando setup. Prefira API/flag/deep link para chegar no ponto, e UI só no trecho sob risco.</p>
+    <p>Rodar tudo em todo PR é a forma mais cara de ter feedback lento. Desenhei quatro tiers:</p>
+    <ol>
+      <li><strong>Tier 0, smoke do PR:</strong> 15 a 25 testes das jornadas irreversíveis (pagar, cadastrar, logar, cancelar). Teto de 8 minutos. Roda em todo PR, bloqueia merge.</li>
+      <li><strong>Tier 1, área impactada:</strong> testes marcados por área (<code>@checkout</code>, <code>@conta</code>, <code>@catalogo</code>) e selecionados pelo diff. Um mapeamento simples de pastas do repositório para tags resolve 80% dos casos. PR que mexe em <code>src/payments/</code> roda o tier 0 mais tudo de <code>@checkout</code>. Teto de 15 minutos.</li>
+      <li><strong>Tier 2, suíte completa pós-merge:</strong> roda na main a cada merge (ou em lote a cada 30 minutos), com sharding. Não bloqueia o PR, mas vermelho na main para a fila de merge até alguém assumir.</li>
+      <li><strong>Tier 3, noturno:</strong> matriz de browsers, regressão visual, cenários longos, testes em quarentena. Relatório de manhã no canal do time.</li>
+    </ol>
+    <p><strong>Sharding</strong> é dividir a suíte em pedaços que rodam em paralelo em máquinas diferentes. Conta para o tier 2: 300 testes com média de 40 segundos dão 200 minutos em série. Com 10 shards, cerca de 20 minutos, mais uns 2 a 3 minutos de subida do ambiente por shard. Com 20 shards não cai para 10 minutos: o teste mais lento e a subida passam a dominar. Eu meço o ponto em que mais shard para de ajudar e fico um pouco antes dele.</p>
+    <p>Matriz completa de browser no PR é vaidade. Em produto com 85% de tráfego em Chromium, o PR roda Chromium. Firefox e WebKit vão para a noite. Se um bug específico de Safari já gerou incidente, aquele teste específico sobe para o tier 1 com WebKit.</p>
 
     <h2>Sinais de suíte doente</h2>
+    <p>Acompanho estes números todo mês. Qualquer um no vermelho por dois meses seguidos e eu paro de adicionar teste para tratar.</p>
     <ul>
-      <li>Mais testes, mesma ou maior taxa de escape.</li>
-      <li>Rerun como ritual cultural (“só roda de novo”).</li>
-      <li>Ninguém sabe dizer, em uma frase, o que o vermelho significa.</li>
-      <li>Page Object maior que o módulo de front que testa.</li>
-      <li>Zero seed; login compartilhado; assert de cor de botão no caminho de dinheiro.</li>
-      <li>Mute de teste sem ticket e sem prazo de desmute.</li>
+      <li><strong>Taxa de verde na primeira tentativa</strong> abaixo de 90% no tier de PR.</li>
+      <li><strong>Reruns por PR</strong> acima de 0,3 em média.</li>
+      <li><strong>Lista de mutados crescendo</strong>, ou qualquer teste mutado há mais de 15 dias sem dono.</li>
+      <li><strong>Escape rate parado com suíte crescendo.</strong> Escape é bug que chega em produção numa área que tem cobertura. Se a suíte dobrou e o escape não caiu, os testes novos não protegem nada.</li>
+      <li><strong>Tempo até a primeira hipótese</strong> acima de 30 minutos num vermelho. Ninguém sabe o que o vermelho significa sem rodar de novo.</li>
+      <li><strong>Pirâmide invertida:</strong> mais E2E que testes de API numa mesma área.</li>
+      <li><strong>Código de teste maior que o código da feature</strong> nos fragmentos de Page Object.</li>
+      <li><strong>Teste sem dono:</strong> se o arquivo não tem time responsável no CODEOWNERS, ninguém conserta quando quebra.</li>
+    </ul>
+    <p>Suíte saudável é chata. Roda rápido, quase sempre verde, e quando fica vermelha todo mundo para porque sabe que é sério. Isso é Qualidade de software que protege o produto: o vermelho tem crédito.</p>
+
+    <h2>Quando não automatizar</h2>
+    <p>Tão importante quanto escolher o que automatizar é dizer não com critério. Não automatizo na UI, e escrevo isso no plano de teste para ninguém achar que esqueci:</p>
+    <ul>
+      <li><strong>Feature em experimento A/B</strong> nas primeiras semanas. Metade do tráfego vê outra tela; a variante vencedora ainda não existe. Testo a lógica de alocação abaixo da UI e a jornada manualmente.</li>
+      <li><strong>Captcha, 2FA por SMS real, biometria.</strong> Se precisa automatizar a jornada, uso bypass controlado no ambiente de teste e testo o mecanismo de segurança à parte.</li>
+      <li><strong>Animação e transição.</strong> Regressão visual no noturno, com tolerância, se importar. Nunca assert de timing no PR.</li>
+      <li><strong>Conteúdo de CMS</strong> que o marketing muda sem deploy.</li>
+      <li><strong>Fluxo usado uma vez por ano</strong> por poucos usuários internos, com rotina manual documentada.</li>
+      <li><strong>Feature que ainda vai mudar de forma</strong> nas próximas duas sprints. Automatizo quando a intenção estabiliza.</li>
+      <li><strong>“Para aumentar a cobertura”.</strong> Número de E2E não é métrica de qualidade. É métrica de custo.</li>
     </ul>
 
-    <h2>Anti-padrões que eu corto no code review</h2>
-    <p>E2e só para cobrir regra de campo. Wait fixo de 5s “porque às vezes falha”. Screenshot como única evidência sem assert de negócio. Dado de produção no teste. Suite que sobe ambiente inteiro por um rename de label. “Vamos automatizar tudo da regressão manual” sem filtro de risco.</p>
-
-    <h2>O que cortar nesta sprint sem culpa</h2>
+    <h2>Duas semanas de poda, com data e número</h2>
+    <p>Este é o plano que rodei na suíte de 420 testes. Uma sprint de 10 dias úteis, com uma pessoa de QA dedicada e meia pessoa de front.</p>
     <ol>
-      <li>Liste os e2e que falharam mais nos últimos 14 dias e classifique no balde (dado / ambiente / seletor / produto).</li>
-      <li>Mate ou reescreva os de dado e seletor. Bug de produto vira ticket, não mute.</li>
-      <li>Congele novos e2e até o smoke crítico ficar abaixo do teto de flake.</li>
-      <li>Mova regra de campo e cálculo para unitário/API onde couber; delete o e2e equivalente.</li>
-      <li>Padronize contrato de seletor (role ou testid) com o time de front numa página só.</li>
-      <li>Publique duração e flake do smoke no canal do time. Número visível muda comportamento.</li>
-      <li>Defina dono da suíte: quem pode mute, quem paga dívida, quem libera freeze.</li>
+      <li><strong>Dias 1 e 2, inventário.</strong> Exportar os últimos 30 dias de execução. Para cada teste: duração média, taxa de falha, caixa da taxonomia das falhas, último bug real que ele pegou, dono. Na nossa suíte, 112 testes nunca tinham pegado bug real em 6 meses.</li>
+      <li><strong>Dia 3, score de risco.</strong> Aplicar impacto × probabilidade × detectabilidade em cada jornada coberta. Marcar o que fica no E2E, o que desce de camada e o que sai.</li>
+      <li><strong>Dia 4, lista de corte.</strong> Apagar sem cerimônia os testes abaixo de 20 de score e os que duplicam outro teste. Saíram 96. O histórico fica no git; ninguém pediu de volta.</li>
+      <li><strong>Dias 5 a 7, descer de camada.</strong> Reescrever regra e validação como teste de API ou unitário. Os 14 de CEP viraram 14 de API; 70 E2E de regra viraram uns 160 testes abaixo da UI, que somados rodam em menos de 1 minuto.</li>
+      <li><strong>Dia 8, contrato de seletor.</strong> Publicar a página do contrato com o front, ligar a regra de lint, corrigir os seletores dos testes que ficaram.</li>
+      <li><strong>Dia 9, tiers e quarentena.</strong> Marcar tags de área, montar o tier 0 com 22 testes, ligar o mapeamento de diff, colocar em quarentena os que ainda flakam acima de 2%, cada um com dono e data.</li>
+      <li><strong>Dia 10, publicar os números.</strong> Antes e depois, no canal do time: quantidade de E2E, duração do tier de PR, taxa de verde na primeira tentativa, reruns por PR. E a regra do orçamento a partir dali.</li>
     </ol>
+    <p>O resultado, seis semanas depois: 180 E2E no total, tier de PR com 22 testes em 7 minutos, verde na primeira tentativa em 97%, reruns por PR em 0,04. Os mesmos 60 PRs por dia passaram a gerar uns 2 reruns, não 17. E o primeiro bug de checkout que o tier 0 pegou depois da poda foi tratado como bug em 20 minutos, porque ninguém mais achava que vermelho era clima.</p>
 
-    <p>Suíte boa é chata, curta e crível. Suíte grande e amarela é dívida com disfarce de qualidade. O merge confia no sinal. Sem sinal, o e2e só atrasa o dia.</p>
+    <p>Automação web escala quando cada E2E tem um motivo escrito, um dono e um custo conhecido. Cortar 240 testes não reduziu a proteção. Pelo contrário: devolveu ao vermelho o significado que o mute tinha tirado.</p>
 
     <div class="article__foot">
       <a href="../index.html#artigos">← Voltar aos artigos</a>

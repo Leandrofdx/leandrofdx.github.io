@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Contrato de API: pegar a quebra antes do e2e caro — Leandro Lima</title>
-  <meta name="description" content="Contract testing de staff: quando Pact se paga, consumer-driven, broker, can-i-deploy, breaking change com números, e o failure mode do contrato morto." />
+  <meta name="description" content="Contract testing com visão de risco: quando Pact se paga e quando é teatro, consumer-driven explicado, broker, tags e can-i-deploy, tipos de breaking change com exemplo, posição no CI, contrato versus OpenAPI versus e2e, contrato morto e um plano de uma semana com métricas." />
   <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="article.css" />
   <link rel="stylesheet" href="../covers.css?v=11" />
@@ -25,97 +25,175 @@
     <h1>Contrato de API: pegar a quebra antes do e2e caro</h1>
     <p class="article__meta">Leitura ~18 min · Quality Engineering</p>
 
-    <p>Quarta, 14h10. Dois times sobem na mesma tarde. O BFF do app espera <code>amount</code> como number. O serviço de preço passou a mandar string <code>"19.90"</code> depois de um “ajuste de serialização”. Staging integrado: fila de 35 minutos, três squads, e2e vermelho no step de carrinho. War room de 1h40. Rollback do provedor. Culpa distribuída no Slack.</p>
-    <p>O shape do JSON poderia ter falhado no CI do provedor em cerca de quatro minutos, no job de verification do pacto, antes do merge. Em vez disso custou incidente coordenado, reputação interna e um e2e que só descobriu o óbvio tarde. Contract testing, quando bem feito, é coordenação barata entre deploys. Quando mal feito, é cerimônia com verde mentiroso.</p>
+    <p>Quarta, 15h20. O time de pedidos sobe uma mudança pequena: novo status <code>PARCIALMENTE_ESTORNADO</code> para devoluções de um item só. Testes unitários verdes, OpenAPI atualizado, e2e de staging verde porque nenhum pedido de staging tinha esse status. Às 16h, o primeiro cliente com estorno parcial abre "Meus pedidos" no app iOS e vê a tela vazia. O decoder do app trata o enum como fechado: um valor desconhecido derruba a lista inteira, não só o pedido. Às 18h, 7% dos usuários ativos com pedido recente veem a tela em branco. O suporte recebe 1.900 chamados em dois dias. A correção no backend sai em 40 minutos. A correção no app leva nove dias, entre build, revisão da loja e adoção da versão nova.</p>
+    <p>Ninguém errou de forma grosseira. O provedor mudou o que achava que oferecia. O consumidor dependia de algo que ninguém tinha escrito. Contract testing existe para essa distância: transformar "o que o consumidor de fato usa" num artefato versionado que o provedor é obrigado a verificar antes de subir. Bem feito, essa quebra falha no PR de pedidos em quatro minutos. Mal feito, vira mais uma etapa verde no pipeline que ninguém lê.</p>
 
     <div class="callout">
-      <p>Contrato morto é pior que nenhum: o pipeline mente e o time para de olhar.</p>
+      <p>Contrato que ninguém atualiza não é rede de segurança. É um verde automático com o nome de outro time em cima.</p>
     </div>
 
-    <h2>O que é contrato aqui (sem slide)</h2>
-    <p>Um <strong>contrato</strong> é um artefato versionado que diz: “este consumidor precisa deste request/response mínimo”. O <strong>provedor</strong> (quem serve a API) prova, no próprio CI, que ainda cumpre. O <strong>consumidor</strong> (BFF, app, batch) publica o que usa de verdade, não o OpenAPI inteiro do Confluence.</p>
-    <p><strong>Consumer-driven</strong> significa isso: quem usa declara o mínimo. Campos extras no provedor não quebram ninguém até alguém depender deles. Não é “o time de plataforma escreveu o schema e todos obedecem”. É “quem sente a dor define a necessidade; quem muda o shape prova que não machucou”.</p>
-    <p><strong>Broker</strong> é o serviço que guarda os pactos, associa versões e tags (branch, ambiente, versão de app) e responde perguntas como “posso deployar esta build do provedor contra o que está em produção nos consumidores?”. Sem broker compartilhado, “verde local” vira mentira entre times.</p>
-
-    <h2>Quando se paga e quando é teatro</h2>
-    <p>Antes de escolher Pact (ou similar), quatro eixos. Se a maioria for fraca, pause. Ferramenta sem dor é currículo, não engenharia.</p>
-    <ol>
-      <li><strong>Cadências diferentes:</strong> provedor e consumidor sobem em pipelines e calendários distintos.</li>
-      <li><strong>Vários consumidores:</strong> web, app, BFF, batch, parceiro. Um breaking change multiplica.</li>
-      <li><strong>Staging integrado caro:</strong> lento, disputado, ou ambos. O e2e integrado vira gargalo político.</li>
-      <li><strong>Histórico de breaking silenciosa:</strong> campo sumiu, tipo mudou, enum novo, nullability, rename sem versão.</li>
-    </ol>
-    <p>Monólito, um time, um pipeline: retorno baixo. Microsserviços multi-squad com deploy independente: o ritual vira rede de segurança. Eu só introduzo contrato onde pelo menos três eixos doem de verdade.</p>
-
-    <h2>Visão de risco</h2>
+    <h2>Vocabulário antes da ferramenta</h2>
+    <p>O assunto tem muito jargão e quase todo mundo usa os termos com sentido um pouco diferente. Estes são os meus:</p>
     <ul>
-      <li><strong>Impacto:</strong> app na loja quebrado, BFF 500 em checkout, batch financeiro com coluna errada.</li>
-      <li><strong>Probabilidade:</strong> sobe com refactor de serialização, “limpeza” de campo, versionamento frouxo, time novo no serviço.</li>
-      <li><strong>Detectabilidade:</strong> sem contrato, a quebra aparece no e2e de staging ou em produção. Com verification no PR do provedor, detectabilidade sobe cedo e barato.</li>
+      <li><strong>Provedor:</strong> quem expõe a API. No exemplo, o serviço de pedidos.</li>
+      <li><strong>Consumidor:</strong> quem chama. App iOS, app Android, web, BFF, job de relatório. Cada um é um consumidor separado, mesmo que chame o mesmo endpoint.</li>
+      <li><strong>Contrato:</strong> a lista de interações que um consumidor espera. "Quando eu faço <code>GET /orders/123</code> com este estado, espero status 200 e um corpo com estes campos, destes tipos."</li>
+      <li><strong>Pacto:</strong> nome do arquivo de contrato no Pact, a ferramenta mais usada para isso. É um JSON gerado pelos testes do consumidor, não escrito à mão.</li>
+      <li><strong>Verificação:</strong> o provedor sobe localmente, recebe as requisições do pacto e confere se as respostas reais batem com o esperado.</li>
+      <li><strong>Provider state:</strong> pré-condição de dado que a interação exige. "Existe um pedido 123 com estorno parcial." O provedor implementa um handler que cria esse estado antes de verificar.</li>
+      <li><strong>Broker:</strong> servidor que guarda os pactos, as versões de cada lado e o resultado de cada verificação. Sem ele, cada time tem a sua verdade local.</li>
+      <li><strong>can-i-deploy:</strong> pergunta que se faz ao broker antes de subir: "esta versão de pedidos é compatível com todas as versões dos consumidores que estão em produção agora?". Sim ou não, com o motivo.</li>
     </ul>
 
-    <h2>Breaking change: o que o contrato pega</h2>
-    <p>Remove campo que o consumidor usa. Muda tipo (<code>number</code> → <code>string</code>). Torna obrigatório o que era opcional. Renomeia sem estratégia de versão. Remove valor de enum que ainda circula.</p>
-    <p>O que <strong>não</strong> pega sozinho: regra de negócio errada com shape certo (desconto 10% calculado como 1%), performance, UX, semântica de status HTTP usada de forma torta mas “válida”. Por isso contrato não mata e2e. Enxuga o e2e que só validava JSON.</p>
-
-    <h3>Exemplo com números</h3>
-    <p>App mobile em produção: 400 mil sessões/semana usam <code>price.cents</code> (inteiro). Provedor “simplifica” e passa a mandar só <code>price: "19.90"</code>. Sem contrato: review na loja, build quebra na sessão de QA tardia ou no usuário. Com pacto publicado pelo app e verification no CI do provedor: o PR do provedor fica vermelho em minutos. Custo: um job. Benefício: não queimar ciclo de loja.</p>
-    <p>Conta de e2e evitado: se cada quebra de shape custava 1h30 de war room + 40 min de fila de staging, e você tinha 3 por trimestre, são ~5h30 de gente cara. Um programa enxuto de contrato no caminho quente costuma se pagar no primeiro trimestre se a dor for real.</p>
-
-    <h2>Fluxo que eu opero</h2>
-    <ol>
-      <li>CI do consumidor gera o pacto a partir dos testes de contrato (o mínimo que o código usa).</li>
-      <li>Pacto é publicado no broker com tag da branch e, no promote, tag do ambiente (staging/prod).</li>
-      <li>CI do provedor baixa os pactos relevantes e roda <strong>verification</strong> contra a build candidata.</li>
-      <li>No release job, <strong>can-i-deploy</strong> pergunta: esta versão do provedor é compatível com os consumidores tagueados em produção? Se não, não sobe.</li>
-    </ol>
-    <p>Sem tag de ambiente, o broker vira arquivo morto: verification contra pactos de feature branch aleatória não protege produção.</p>
-
-    <h2>Contrato versus OpenAPI versus e2e</h2>
-    <p><strong>OpenAPI</strong> descreve o que o provedor acha que oferece (e às vezes o que gostaria de oferecer). Útil para documentação e geração de client. Não prova que o consumidor real ainda é atendido depois do refactor.</p>
-    <p><strong>Contrato consumer-driven</strong> descreve o que alguém de fato usa. Prova no CI do provedor.</p>
-    <p><strong>E2E</strong> prova orquestração e efeito colateral (pedido criado, e-mail, saldo). Os três se complementam. O desperdício é repetir o mesmo assert de shape nas três camadas e ainda brigar no staging pelo mesmo JSON.</p>
-    <p>Movimento que eu faço depois do primeiro pacto estável: retirar do e2e as asserções de campo já cobertas pelo contrato. O e2e passa a afirmar efeito (“pedido status=paid”), não a presença de <code>cents</code>.</p>
-
-    <h2>Failure modes do programa</h2>
+    <h2>Consumer-driven, sem mistério</h2>
+    <p>Consumer-driven quer dizer que <strong>o consumidor escreve o contrato</strong>, e escreve só o que usa. O endpoint <code>GET /orders/{id}</code> do exemplo devolve 38 campos. O app iOS usa 6: <code>id</code>, <code>status</code>, <code>createdAt</code>, <code>items[].name</code>, <code>items[].quantity</code> e <code>total.cents</code>. O pacto do app tem esses 6. O pacto do job de relatório tem outros 9. O provedor pode mudar ou remover qualquer um dos 23 campos que ninguém declarou sem quebrar verificação nenhuma.</p>
+    <p>Isso inverte a pergunta. Em vez de "o provedor está de acordo com a especificação?", a pergunta vira "<strong>alguém que está em produção depende do que eu estou mudando?</strong>". É a pergunta que importa num deploy.</p>
+    <p>Dois cuidados no lado do consumidor, que separam contrato útil de contrato frágil:</p>
     <ul>
-      <li><strong>Pact em 200 endpoints sem dono:</strong> ninguém atualiza, verification vira barulho.</li>
-      <li><strong>Broker órfão:</strong> cai, ninguém sabe, times “desligam temporariamente” e nunca voltam.</li>
-      <li><strong>Consumidor para de publicar:</strong> provedor verifica artefato velho e fica verde mentiroso. Silencioso e letal.</li>
-      <li><strong>Contrato genérico demais:</strong> “aceito qualquer JSON” não pega breaking. Contrato frouxo é teatro.</li>
-      <li><strong>E2e ainda testando o mesmo shape:</strong> custo dobrado, aprendizado zero.</li>
-      <li><strong>Ferramenta porque arquitetura pediu:</strong> sem dor nos quatro eixos, vira slide.</li>
+      <li><strong>Afirme tipo e forma, não valor.</strong> Use os matchers da ferramenta: <code>like(...)</code> para "qualquer valor deste tipo", <code>eachLike(...)</code> para "lista com pelo menos um item com esta forma", <code>regex</code> para formato de data. Contrato que exige <code>total.cents == 4990</code> quebra quando alguém muda a massa de teste, e o time aprende a ignorar.</li>
+      <li><strong>Gere o pacto a partir do código real do cliente.</strong> O teste do consumidor chama o cliente HTTP que o app de fato usa, contra um mock do Pact. Se o pacto é escrito à mão ao lado do código, ele diverge na primeira refatoração.</li>
     </ul>
 
-    <h2>Posição no CI (detalhe que decide)</h2>
-    <p>Verification cedo no pipeline do provedor, não só no release. Feedback de minutos no PR de quem quebrou. Publicação no CI do consumidor a cada merge na main (e tags de ambiente no promote). “Rodamos contrato manualmente antes do deploy” não escala e não cria memória.</p>
-
-    <h2>Governança mínima (sem isso o programa morre)</h2>
+    <h2>Risco I×P×D por par de integração</h2>
+    <p>Não pontuo endpoints soltos. Pontuo pares consumidor e provedor, com três notas de 1 a 5 multiplicadas:</p>
     <ul>
-      <li><strong>Dono do broker</strong> com backup. Quem restaura, quem paga a conta, quem decide retenção.</li>
-      <li><strong>Dono por pacto</strong> no time consumidor: se o app para de publicar, o provedor não pode ficar verde no escuro.</li>
-      <li><strong>SLI simples:</strong> % de PRs de provedor com verification obrigatória no caminho quente; idade máxima do pacto de prod (ex.: consumidor sem publicar em 14 dias = alerta).</li>
-      <li><strong>Breaking change process:</strong> versionar, dual-run, ou coordenar consumers antes de remover campo. Contrato não substitui conversa; ele prova que a conversa aconteceu a tempo.</li>
+      <li><strong>Impacto (I):</strong> se a integração quebrar, quanto dói? 5 é dinheiro ou tela principal fora.</li>
+      <li><strong>Probabilidade (P):</strong> com que frequência o provedor muda esse payload? Quantos times mexem nele?</li>
+      <li><strong>Detectabilidade (D):</strong> quão tarde a quebra aparece? Consumidor mobile tem D alto por natureza: a versão velha fica instalada por meses e não há rollback.</li>
     </ul>
-    <p>Eu recuso “vamos pactar tudo”. Começo por um bounded context de receita. Expando quando o métrico (escapes de shape) justificar. Cobertura teatral de 200 endpoints é o caminho mais rápido para ninguém acreditar no vermelho.</p>
+    <p>Exemplo de um e-commerce com nove squads:</p>
+    <ul>
+      <li>App iOS e Android para pedidos: I 5 × P 4 × D 5 = <strong>100</strong>.</li>
+      <li>BFF web para catálogo e preço: I 5 × P 4 × D 3 = <strong>60</strong>.</li>
+      <li>Checkout para antifraude (terceiro): I 5 × P 2 × D 3 = <strong>30</strong>.</li>
+      <li>BFF web para recomendação: I 2 × P 4 × D 3 = <strong>24</strong>.</li>
+      <li>Job noturno para relatório financeiro: I 3 × P 2 × D 2 = <strong>12</strong>.</li>
+    </ul>
+    <p>Começo pelos pares acima de 50. Abaixo de 20, um teste de API comum no provedor e monitoramento costumam bastar. O par com antifraude tem nota média, mas não é candidato a consumer-driven: o terceiro não vai rodar a sua verificação. Ali o caminho é outro, que aparece mais adiante.</p>
 
-    <h2>Diálogo que eu quero no PR do provedor</h2>
-    <p>Ruim: “Quebrei o e2e de staging, depois ajeito.”</p>
-    <p>Bom: “Verification falhou: consumer app@2.14.1 em prod exige price.cents integer. Remoção planejada para v3 com dual-publish por 14 dias. can-i-deploy=no até app migrar.”</p>
-    <p>Isso é linguagem de coordenação. O e2e caro deixa de ser o primeiro alarme. Vira rede de segurança residual.</p>
-
-    <h2>Se você só tiver uma semana no caminho quente</h2>
+    <h2>Quando Pact se paga e quando é teatro</h2>
+    <p>Antes de instalar broker, eu passo a organização por quatro eixos. Dou de 0 a 2 em cada.</p>
     <ol>
-      <li>Escolha um provedor quente (preço, auth, pedido) e dois consumidores reais (ex.: BFF web + app).</li>
-      <li>Publique pactos só do que eles usam no caminho de dinheiro. Não inventarie a API inteira.</li>
-      <li>Ligue verification no CI do provedor; quebre de propósito um campo num PR de teste e confirme o vermelho.</li>
-      <li>Nomeie dono do broker (backup incluso). Sem dono, pare.</li>
-      <li>Tagueie staging e prod; ligue can-i-deploy no job de release do provedor.</li>
-      <li>Retire do e2e as asserções de shape já cobertas.</li>
-      <li>Meça 30 dias: breaking changes pegos no CI versus escapes em staging/prod. Se o número não mover, o programa está teatro. Ajuste ou mate.</li>
+      <li><strong>Cadência independente:</strong> provedor e consumidor sobem em momentos diferentes, por times diferentes? 0 se é um pipeline só. 2 se cada serviço sobe várias vezes por dia por conta própria, ou se um dos lados é mobile.</li>
+      <li><strong>Número de consumidores:</strong> 0 com um consumidor. 1 com dois ou três. 2 com quatro ou mais, ou quando ninguém sabe ao certo quantos são.</li>
+      <li><strong>Custo do ambiente integrado:</strong> 0 se subir tudo junto leva minutos e é confiável. 2 se o staging é disputado, lento, com dado que não representa produção, ou se o e2e leva mais de 30 minutos.</li>
+      <li><strong>Histórico de quebra silenciosa:</strong> 0 sem incidente de integração no último ano. 2 com dois ou mais incidentes de campo removido, tipo trocado, enum novo ou nulidade mudada.</li>
     </ol>
+    <p>Total de <strong>6 a 8</strong>: o ritual se paga em semanas. De <strong>4 a 5</strong>: vale para os pares de maior risco, não para a empresa inteira. <strong>3 ou menos</strong>: é teatro. Um monólito com um time e um pipeline tira 1 ou 2. Ali, teste de integração no próprio repositório faz o mesmo trabalho sem broker, sem provider state e sem reunião.</p>
+    <p>A empresa do exemplo tirou 7: cadência independente 2, consumidores 2, staging 2 (o e2e levava 48 minutos e tinha 12% de falha intermitente), histórico 1. Tinha motivo concreto, não "a arquitetura recomendou".</p>
 
-    <p>Contrato bom encurta a distância entre “eu subi” e “eu quebrei você”. Contrato de fachada só adiciona cerimônia. Qualidade de software que protege o produto prefere quatro minutos de verification a noventa minutos de war room.</p>
+    <h2>Tipos de breaking change, e o que o contrato pega</h2>
+    <p>"Breaking change" é qualquer mudança no provedor que faz um consumidor existente se comportar errado sem que o consumidor tenha mudado. Divido em três grupos, porque o contrato pega cada um de um jeito.</p>
+
+    <h3>Pega bem</h3>
+    <ul>
+      <li><strong>Remoção de campo usado:</strong> o caso mais comum e o mais fácil.</li>
+      <li><strong>Renomeação:</strong> <code>createdAt</code> vira <code>created_at</code>. Para o consumidor é remoção mais adição.</li>
+      <li><strong>Troca de tipo:</strong> número vira string, objeto vira lista.</li>
+      <li><strong>Nulidade:</strong> campo que nunca vinha nulo passa a vir. O pacto precisa declarar "não nulo" para isso falhar, então depende do matcher certo.</li>
+      <li><strong>Campo de requisição passa a ser obrigatório:</strong> o consumidor manda a requisição antiga e o provedor responde 400.</li>
+      <li><strong>Mudança de status code ou de rota:</strong> 200 vira 204, ou <code>/v1/orders</code> passa a redirecionar.</li>
+    </ul>
+
+    <h3>Pega se o contrato for bem escrito</h3>
+    <ul>
+      <li><strong>Formato:</strong> data ISO com fuso vira timestamp sem fuso. Só falha se o consumidor usou matcher de regex.</li>
+      <li><strong>Enum novo:</strong> o caso da abertura. Um contrato que afirma "status é string" não pega. Para pegar, o consumidor com decoder estrito precisa de uma interação com provider state para cada valor que trata, e o provedor precisa de uma regra no próprio pipeline: enum novo exige rodar verificação contra um estado que produz o valor novo. Na prática, eu prefiro corrigir os dois lados: o consumidor passa a tolerar valor desconhecido, e o contrato registra essa tolerância como requisito.</li>
+      <li><strong>Paginação:</strong> lista que vinha inteira passa a vir paginada. Pega se o pacto tem uma interação com mais itens do que o novo tamanho de página.</li>
+    </ul>
+
+    <h3>Não pega</h3>
+    <p>Regra de negócio errada com forma certa, desempenho, autorização por perfil, efeito colateral (o e-mail foi enviado? o estoque baixou?). Contrato verifica forma e presença. É por isso que ele não substitui e2e. Ele enxuga o e2e que só estava lá para validar JSON.</p>
+
+    <h3>O exemplo <code>price.cents</code></h3>
+    <p>O app mobile exibe preço lendo <code>price.cents</code>, inteiro em centavos: 4990 vira "R$ 49,90". O time de catálogo decide padronizar e manda só <code>price.amount</code> como string decimal, <code>"49.90"</code>, removendo <code>cents</code>. No OpenAPI a mudança está documentada e parece limpa.</p>
+    <p>No pacto do app existe a interação "buscar produto 789" esperando <code>price.cents</code> como inteiro. No PR do catálogo, a verificação falha com a mensagem: campo <code>$.price.cents</code> esperado como inteiro, não encontrado. O can-i-deploy contra produção responde não, porque as versões 4.6 a 4.11 do app, todas registradas como em produção, dependem do campo. Custo da descoberta: quatro minutos de CI e uma conversa entre dois times.</p>
+    <p>Sem contrato, o caminho seria outro. O staging tinha a versão mais nova do app, que alguém já tinha ajustado. O e2e passa. A quebra aparece nas versões antigas instaladas: preço "R$ 0,00" ou crash na tela de produto, dependendo de como cada versão trata o nulo.</p>
+    <p>A correção tem nome: <strong>expandir e contrair</strong>. Primeiro o provedor adiciona <code>price.amount</code> e mantém <code>price.cents</code>. O app passa a ler o campo novo numa versão. O provedor marca <code>cents</code> como obsoleto e espera. Quando as versões que leem <code>cents</code> caem abaixo de 0,5% das sessões, e o app força atualização para quem está abaixo da versão mínima, os pactos dessas versões deixam de estar marcados como em produção no broker. Aí o can-i-deploy libera a remoção. Nesse caso levou sete semanas. Sete semanas com dois campos convivendo é barato. Um dia com preço zerado não é.</p>
+
+    <h2>Broker, versões, tags e can-i-deploy</h2>
+    <p>O broker é onde o contract testing deixa de ser teste e vira coordenação. Ele guarda uma matriz: cada versão de cada consumidor, cada versão de cada provedor, e se a verificação entre elas passou.</p>
+    <ul>
+      <li><strong>Versão:</strong> sempre o SHA do commit, nunca "latest" nem número manual. Sem isso, você não sabe qual código gerou qual pacto.</li>
+      <li><strong>Branch:</strong> cada pacto publicado leva o nome da branch. O provedor verifica, por padrão, os pactos da branch principal de cada consumidor.</li>
+      <li><strong>Ambiente:</strong> quando uma versão sobe, o pipeline registra no broker que ela está em staging ou em produção. Nas versões mais antigas do Pact isso era feito com tags como <code>prod</code>; hoje existe registro explícito de deploy e de release. O conceito é o mesmo: o broker precisa saber o que está rodando onde.</li>
+      <li><strong>Deploy versus release:</strong> serviço web tem uma versão em produção por vez; quando a nova sobe, a anterior sai. App mobile tem várias versões em produção ao mesmo tempo, porque o usuário não atualiza junto. Para o app eu registro cada versão publicada como release e só removo quando ela sai do suporte. É esse detalhe que faz o exemplo do <code>price.cents</code> funcionar.</li>
+    </ul>
+    <p>O can-i-deploy cruza tudo isso. Antes de subir pedidos na versão <code>a1b2c3</code> para produção, o pipeline pergunta: <code>can-i-deploy --pacticipant pedidos --version a1b2c3 --to-environment production</code>. O broker olha todos os consumidores registrados em produção, verifica se existe verificação com sucesso entre <code>a1b2c3</code> e cada um deles, e responde com a lista. Se algum par nunca foi verificado, a resposta também é não. Isso é intencional: ausência de evidência não é compatibilidade.</p>
+    <p>Dois recursos que evitam travar o time sem perder o gate:</p>
+    <ul>
+      <li><strong>Pactos pendentes:</strong> um pacto novo de consumidor, que o provedor nunca verificou com sucesso, falha a verificação mas não quebra o build do provedor. O provedor não pode ser bloqueado por uma expectativa que ele ainda não teve chance de implementar.</li>
+      <li><strong>Pactos em andamento:</strong> o provedor verifica também pactos de branches de feature dos consumidores, e o resultado volta para o PR do consumidor. O time do app descobre que pedidos ainda não tem o campo antes de fazer merge.</li>
+    </ul>
+
+    <h2>Posição no CI, passo a passo</h2>
+    <p>Quase toda implantação que vi falhar errou aqui. O contrato precisa estar em três pipelines, cada um com uma responsabilidade:</p>
+    <ol>
+      <li><strong>Pipeline do consumidor, a cada PR:</strong> os testes de contrato rodam junto com os unitários, geram o pacto e publicam no broker com SHA e branch. Leva segundos. Se o pacto mudou, um webhook do broker dispara a verificação no provedor.</li>
+      <li><strong>Pipeline do provedor, a cada PR e a cada webhook:</strong> verificação contra os pactos da branch principal de cada consumidor, contra tudo que está registrado em produção e em staging, e contra pactos pendentes e em andamento. Com provider states leves, fica entre 2 e 4 minutos. Publica o resultado no broker.</li>
+      <li><strong>Pipeline de deploy, dos dois lados:</strong> can-i-deploy antes de subir para cada ambiente. Depois de subir, registro do deploy ou do release no broker. Sem esse registro, o can-i-deploy seguinte compara contra uma foto velha de produção.</li>
+    </ol>
+    <p>O erro clássico é parar no passo 2. A verificação roda, fica verde, e ninguém pergunta ao broker antes do deploy. Aí o contrato prova que o provedor atende a branch principal do app, que ainda nem foi publicada, e não diz nada sobre as cinco versões instaladas nos celulares.</p>
+
+    <h2>Contrato, OpenAPI e e2e: cada um responde uma pergunta</h2>
+    <p>Eu separo pela pergunta, porque é isso que evita repetir o mesmo assert em três camadas.</p>
+    <ul>
+      <li><strong>OpenAPI responde:</strong> o que o provedor diz que oferece? Bom para documentação, geração de cliente e validação de que a implementação segue a especificação. Não sabe quem usa o quê. Remover um campo documentado é "uma mudança no spec", não "uma quebra no app 4.8".</li>
+      <li><strong>Contrato consumer-driven responde:</strong> quem depende do que eu vou mudar, e essa dependência ainda é atendida? Sabe exatamente quem usa o quê, por versão. Não prova efeito colateral nem regra de negócio.</li>
+      <li><strong>E2e responde:</strong> a orquestração inteira produz o resultado de negócio? O pedido foi criado, o estoque baixou, o e-mail saiu. É o mais caro e o mais lento. Deve ficar com poucos cenários de jornada, não com validação de forma.</li>
+    </ul>
+    <p>Na empresa do exemplo, a suíte de e2e tinha 210 cenários e 48 minutos. Depois de três meses de contrato nos pares de maior risco, 74 cenários que só validavam forma de resposta foram removidos. A suíte foi para 29 minutos, e a falha intermitente caiu de 12% para 5%, porque os cenários removidos eram justamente os que dependiam de dado específico de staging.</p>
+    <p>Para o terceiro que não vai rodar sua verificação, como o antifraude, existe o caminho bidirecional: você compara o pacto do seu consumidor contra o OpenAPI que o terceiro publica. É mais fraco que verificação real, porque confia que o spec do terceiro é verdade, mas pega a quebra de forma quando eles atualizam o spec antes de subir. Para o resto, monitoramento de erro de parsing em produção.</p>
+
+    <h2>Contrato morto: o failure mode silencioso</h2>
+    <p>O pior estado não é não ter contrato. É ter contrato verde que não representa mais ninguém. Acontece devagar, e eu já vi de quatro formas:</p>
+    <ol>
+      <li><strong>Consumidor para de publicar.</strong> O time do app refatorou o cliente HTTP, os testes de contrato foram apagados "temporariamente". O provedor continua verificando o último pacto publicado, de três meses atrás. Verde eterno.</li>
+      <li><strong>Provider state de mentira.</strong> O handler de "existe um pedido com estorno parcial" não faz nada, e a verificação passa porque a resposta padrão tem a mesma forma. O estado nunca é exercitado.</li>
+      <li><strong>Gate com exceção permanente.</strong> Alguém adicionou um parâmetro para ignorar um consumidor no can-i-deploy durante um incidente. A exceção está lá há oito meses.</li>
+      <li><strong>Registro de deploy quebrado.</strong> O passo que registra o deploy no broker falha silenciosamente. O broker acha que produção ainda roda a versão de março.</li>
+    </ol>
+    <p>Para cada um, um sinal mensurável, revisado toda semana num painel do broker:</p>
+    <ul>
+      <li><strong>Idade do último pacto por consumidor ativo:</strong> alerta acima de 30 dias quando o consumidor teve commits no período.</li>
+      <li><strong>Provider states sem efeito:</strong> eu rodo uma vez por mês a verificação com os handlers desligados. Interação que continua verde sem o estado está testando nada.</li>
+      <li><strong>Exceções no can-i-deploy:</strong> qualquer parâmetro de ignorar tem data de expiração e dono, ou o pipeline falha.</li>
+      <li><strong>Divergência de ambiente:</strong> comparação diária entre a versão registrada no broker e a versão que o deploy reporta. Se divergir, alerta.</li>
+    </ul>
+    <p>E um dono nomeado para o broker. Não "a plataforma". Uma pessoa, com tempo alocado.</p>
+
+    <h2>Anti-padrões</h2>
+    <ul>
+      <li>Pact em 200 endpoints no primeiro mês, sem pontuação de risco e sem dono por par.</li>
+      <li>Contrato afirmando valor exato em vez de tipo e forma.</li>
+      <li>Usar contrato como teste funcional do provedor: "quando o cupom é inválido, o desconto é zero" é regra de negócio, pertence ao teste do provedor.</li>
+      <li>Provider states que montam meio banco de dados. Se o handler precisa de 40 linhas de setup, a interação está pedindo demais.</li>
+      <li>Verificação sem can-i-deploy, ou can-i-deploy sem registro de deploy.</li>
+      <li>Versão do pacto como "latest" ou número digitado à mão.</li>
+      <li>Manter no e2e todas as asserções de forma que o contrato já cobre, e ainda brigar por staging.</li>
+      <li>Adotar a ferramenta porque um diagrama de arquitetura recomendou, com nota 3 nos quatro eixos.</li>
+    </ul>
+
+    <h2>Cinco dias até o primeiro "não" do can-i-deploy</h2>
+    <p>Uma semana basta para provar valor num par, se o escopo for honesto. O objetivo do quinto dia é ver o broker bloquear uma mudança real, ou pelo menos uma simulada, antes do e2e.</p>
+    <ol>
+      <li><strong>Dia 1, escolher o par:</strong> pontue os pares de integração com I×P×D e os quatro eixos. Pegue um provedor acima de 50 e dois consumidores reais dele, de preferência um mobile. Levante as últimas cinco quebras de integração desse provedor para ter linha de base.</li>
+      <li><strong>Dia 2, contratos do consumidor:</strong> nos dois consumidores, escreva interações só para os campos que o código lê. Use matchers de tipo. Gere o pacto pelo cliente HTTP real. Meta: entre 5 e 12 interações por consumidor, não mais.</li>
+      <li><strong>Dia 3, broker e publicação:</strong> suba o broker, publique pelo CI com SHA e branch, configure o webhook que dispara a verificação no provedor. Nomeie o dono do broker nesse dia, não depois.</li>
+      <li><strong>Dia 4, verificação no provedor:</strong> implemente os provider states, ligue a verificação no PR com pactos pendentes habilitados. Mantenha abaixo de 4 minutos. Faça um PR de teste que remove um campo declarado e veja falhar.</li>
+      <li><strong>Dia 5, gate e corte:</strong> can-i-deploy no pipeline de deploy dos três serviços, registro de deploy e de release depois de subir. Liste as asserções de forma do e2e que o contrato agora cobre e remova as primeiras.</li>
+    </ol>
+    <p>Métricas que eu acompanho a partir dali, com revisão em 30 dias:</p>
+    <ul>
+      <li><strong>Quebras pegas no CI versus quebras que escaparam</strong> para staging ou produção nesse par. Se em 30 dias o CI pegou 3 e escaparam 0, o ritual se pagou. Se pegou 0 e escaparam 2, o contrato está declarando a coisa errada.</li>
+      <li><strong>Tempo até o sinal:</strong> do push do provedor até a resposta de compatibilidade. Alvo abaixo de 10 minutos, contra os 48 do e2e.</li>
+      <li><strong>Pactos verificados em menos de 24 horas</strong> depois de publicados. Abaixo de 90%, o webhook ou o dono estão falhando.</li>
+      <li><strong>Minutos de e2e removidos</strong> e queda na falha intermitente da suíte.</li>
+      <li><strong>Falso positivo do contrato:</strong> verificações vermelhas que não eram quebra real. Acima de 10%, os matchers estão afirmando valor em vez de forma.</li>
+    </ul>
+    <p>Com esses números na mão, a conversa para expandir para o próximo par deixa de ser opinião sobre ferramenta.</p>
+
+    <p>Contrato bom encurta a distância entre "eu subi" e "eu quebrei você" para quatro minutos e uma mensagem com o nome do campo. Contrato de fachada só adiciona uma etapa verde ao pipeline e uma falsa sensação de que alguém está olhando.</p>
 
     <div class="article__foot">
       <a href="../index.html#artigos">← Voltar aos artigos</a>
