@@ -566,8 +566,8 @@
 .cover--mirror .cover__a {
   left: 18%;
   bottom: 8%;
-  width: 28%;
-  height: 40%;
+  width: 26%;
+  height: 32%;
   background: linear-gradient(165deg, #3a3a3c, #121214);
   box-shadow: 10px 16px 24px rgba(20, 20, 22, 0.14);
 }
@@ -575,8 +575,8 @@
 .cover--mirror .cover__b {
   right: 18%;
   bottom: 8%;
-  width: 28%;
-  height: 36%;
+  width: 26%;
+  height: 28%;
   background: linear-gradient(195deg, #F7F6F8, #C8C6CE);
   box-shadow: inset 0 0 0 1px rgba(20, 20, 22, 0.06);
 }
@@ -585,7 +585,7 @@
   left: 49%;
   bottom: 4%;
   width: 2%;
-  height: 48%;
+  height: 40%;
   border-radius: 999px;
   background: linear-gradient(180deg, #67e8f9, #0891b2);
   box-shadow: 0 0 18px rgba(8, 145, 178, 0.4);
