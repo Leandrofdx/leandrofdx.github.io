@@ -25,9 +25,9 @@
     <h1>Quando o teste falha e ninguém sabe por quê</h1>
     <p class="article__meta">Leitura ~18 min · Quality Engineering</p>
 
-    <p>Quinta, 16h40. O e2e de checkout fica vermelho no PR que mexe no cálculo de frete. Step 7: <code>Timeout 30000ms exceeded</code> esperando o botão “Pedido confirmado”. O screenshot mostra um spinner. Alguém escreve “flake de novo” e clica em rerun. Vermelho. Rerun. Verde. Merge às 16h58.</p>
-    <p>Às 18h50, já em produção, o p95 do pagamento sobe de 900 ms para 2,4 s. A taxa de abandono no pay vai de 6% para 17% em uma hora e meia. Com ticket médio de R$ 210 e uns 1.800 checkouts iniciados nessa janela, os 11 pontos extras de abandono são cerca de 200 pedidos, algo perto de R$ 42 mil que não entraram. O rollback sai às 20h15.</p>
-    <p>Na post-mortem eu abri o trace de um dos runs vermelhos da tarde. Estava lá, com nome e sobrenome: o span <code>GET /freight/quote</code> passou a chamar o serviço de estoque duas vezes, e a segunda chamada esperava 1,7 s por conexão no pool. O teste tinha visto a verdade às 16h40. Faltava alguém conseguir ler o que ele viu.</p>
+    <p>O e2e de checkout ficou vermelho no PR do frete. Step 7: <code>Timeout 30000ms exceeded</code>, screenshot de um spinner. Alguém escreveu “flake de novo” e pediu rerun. Vermelho. Rerun. Verde. Merge.</p>
+    <p>Em produção, poucas horas depois, o p95 do pagamento foi de 900 ms para 2,4 s. Abandono no pay de 6% para 17%. Ticket médio R$ 210, uns 1.800 checkouts na janela: cerca de 200 pedidos a menos, perto de R$ 42 mil que não entraram. Rollback no fim da noite.</p>
+    <p>Na post-mortem eu abri o trace de um dos runs vermelhos. Estava lá: o span <code>GET /freight/quote</code> passou a chamar estoque duas vezes, e a segunda espera 1,7 s no pool. O teste tinha visto a verdade. Faltava alguém conseguir ler.</p>
     <p>Esse é o ponto do artigo inteiro: o teste já é um gerador de tráfego controlado, com intenção conhecida e resultado esperado. Se o sistema por baixo dele é mudo, cada falha vira palpite. Se o sistema fala, cada falha vira diagnóstico.</p>
 
     <div class="callout">

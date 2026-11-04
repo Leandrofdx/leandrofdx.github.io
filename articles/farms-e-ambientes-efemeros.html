@@ -25,7 +25,7 @@
     <h1>Ambiente de teste caro demais: o que vale a pena</h1>
     <p class="article__meta">Leitura ~18 min · Quality Engineering</p>
 
-    <p>Quinta, 16h40. Três squads querem o staging ao mesmo tempo. O time de pagamentos está no meio de um e2e de 25 minutos quando o time de catálogo faz deploy de uma branch que muda o schema de produto. O e2e de pagamentos quebra. Alguém abre incidente no canal de QA: "staging instável de novo". A fatura da cloud do mês anterior chegou na mesma tarde: R$ 38 mil só em ambientes não produtivos. No retro do trimestre, dois bugs de contrato entre serviços chegaram em produção. Nenhum dos dois precisava de um clone de produção para ser pego. Precisava de um teste de contrato num ambiente que sobe com o PR e morre depois.</p>
+    <p>Três squads no mesmo staging. Pagamentos no meio de um e2e de 25 minutos; catálogo faz deploy que muda o schema de produto; o e2e quebra. Alguém abre no canal: "staging instável de novo". No mesmo dia chega a fatura: R$ 38 mil só em ambientes não produtivos. No retro do trimestre, dois bugs de contrato entre serviços tinham ido a produção. Nenhum precisava de clone de prod para ser pego. Precisava de contrato num ambiente que sobe com o PR e morre depois.</p>
     <p>Esse é o padrão que mais encontro: muito dinheiro em fidelidade genérica, pouco sinal útil e nenhuma frase escrita sobre o que cada ambiente prova. O time paga caro por um "igual produção" que não é igual nos pontos que importam, e paga com tempo de gente a fila e o flake que esse ambiente gera.</p>
     <p>Neste texto eu destrincho como decido onde gastar fidelidade, com conta na mão. Antes do jargão, a definição.</p>
 

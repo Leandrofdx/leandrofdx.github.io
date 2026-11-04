@@ -25,7 +25,7 @@
     <h1>Acessibilidade: qualidade que a auditoria não vê sozinha</h1>
     <p class="article__meta">Leitura ~18 min · Quality Engineering</p>
 
-    <p>Terça, 14h. O pipeline do checkout está verde, inclusive o job de acessibilidade: zero violações críticas no scanner. Na mesma tarde, chega um e-mail ao SAC. Uma cliente cega, que usa leitor de tela no celular, tentou comprar três vezes. Ela chega ao carrinho. Toca em "Finalizar". O leitor anuncia "botão". Só isso. Ela não sabe se é finalizar, remover ou voltar. Arrisca. Abre um modal de endereço. O foco fica na página de trás; o leitor continua lendo o rodapé. Ela fecha o app e compra no concorrente.</p>
+    <p>Pipeline do checkout verde, inclusive o job de a11y: zero violações críticas no scanner. No SAC, no mesmo dia, o relato de uma cliente cega: tentou comprar três vezes com leitor de tela. Chega ao carrinho, toca em "Finalizar", o leitor anuncia só "botão". Não dá para saber se é pagar, remover ou voltar. Arrisca. Abre modal de endereço; o foco fica na página de trás e o leitor lê o rodapé. Fecha o app. Compra no concorrente.</p>
     <p>Nenhuma dessas falhas era invisível. O botão tinha só um ícone, sem nome acessível, mas o ícone estava dentro de um componente que o scanner não renderizou naquele estado. O modal estava correto no HTML estático; o problema era o foco que o JavaScript não movia. A auditoria automática olhou a página. Não percorreu a jornada.</p>
     <p>Esse é o ponto deste texto. Acessibilidade não é item de compliance que se resolve com relatório. É qualidade de produto: a pergunta é se uma pessoa consegue concluir a tarefa, não se a página passou num conjunto de regras.</p>
 
