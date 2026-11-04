@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>IA em produção: como perceber que o modelo mudou sem ninguém avisar — Leandro Lima</title>
+  <meta name="description" content="Qualidade de features com LLM depois do go-live: fontes de mudança silenciosa, alias versus versão fixa, data drift, concept drift e output drift com números, PSI calculado à mão, centroide de embedding, sinais de saída, avaliação online com conta de amostra, shadow, canary com rollback automático, A/B com guardrails, gate de regressão, viés de feedback, runbook de incidente e convenções GenAI do OpenTelemetry." />
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="article.css" />
+  <link rel="stylesheet" href="../covers.css?v=16" />
+</head>
+<body>
+  <header class="top">
+    <a class="top__brand" href="../index.html">Leandro Lima</a>
+    <a href="../index.html#artigos">← Artigos</a>
+  </header>
+  <article class="article">
+    <div class="cover cover--drift" aria-hidden="true">
+      <span class="cover__n">20</span>
+      <span class="cover__a"></span>
+      <span class="cover__b"></span>
+      <span class="cover__c"></span>
+    </div>
+    <span class="article__tag">AI QA</span>
+    <h1>IA em produção: como perceber que o modelo mudou sem ninguém avisar</h1>
+    <p class="article__meta">Leitura ~20 min · Quality Engineering</p>
+
+    <p>4,7%. Esse era o número no canto de um painel que ninguém abria: a fração de respostas do assistente de pós-venda que chegavam sem o campo <code>protocolo</code> no JSON. Durante cinco meses ele tinha ficado entre 0,2% e 0,4%. Quando o parser não acha o campo, o app mostra "Não consegui concluir seu atendimento, tente novamente". O cliente tenta de novo, cai no mesmo lugar e abre chamado.</p>
+    <p>Foi um desses chamados que chegou ao time, nove dias depois do salto: "Pela terceira vez o robô diz que não conseguiu e não me dá número de nada. Vou no Procon." Ninguém tinha feito deploy naqueles nove dias. O prompt era o mesmo, o código era o mesmo, o índice de documentos era o mesmo. Quando abrimos os traces, o campo que diz qual modelo respondeu de fato tinha trocado de valor numa madrugada. O código pedia o modelo por um nome genérico, e o provedor tinha passado esse nome a apontar para uma versão nova. A versão nova era melhor em quase tudo, e às vezes embrulhava o JSON num bloco de markdown.</p>
+    <p>Esse caso resume o que muda depois do go-live. Antes, qualidade é uma pergunta sobre o seu deploy. Depois, o sistema muda sozinho, por fora, e a pergunta passa a ser quanto tempo você leva para perceber.</p>
+
+    <div class="callout">
+      <p>Feature com LLM não fica pronta no go-live: ela começa a derivar no dia seguinte, e a única escolha do time é descobrir pelo painel ou pelo Procon.</p>
+    </div>
+
+    <h2>Cinco jeitos de o sistema mudar sem deploy seu</h2>
+    <p>Quando digo "o modelo mudou", quase nunca é só o modelo. Uma feature com LLM é um conjunto: modelo, prompt (o texto de instrução que vai junto com a pergunta do usuário), documentos recuperados como contexto, ferramentas que o modelo pode chamar e as pessoas que usam. Separo cinco fontes de mudança, porque cada uma pede um detector diferente.</p>
+    <table>
+      <thead>
+        <tr><th>Fonte</th><th>Exemplo concreto</th><th>Passa pelo seu pipeline?</th><th>Primeiro sinal típico</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Provedor atualiza o alias do modelo</td><td>O nome genérico passa a apontar para um snapshot novo</td><td>Não</td><td>Formato, tamanho da resposta, taxa de recusa</td></tr>
+        <tr><td>Edição de prompt</td><td>Alguém acrescenta "seja mais empático" no painel da ferramenta</td><td>Às vezes não, se o prompt mora fora do repositório</td><td>Tamanho da resposta, custo por requisição</td></tr>
+        <tr><td>Refresh do índice de recuperação</td><td>Reindexação traz a política de troca antiga e a nova lado a lado</td><td>Raramente; costuma ser job agendado</td><td>Respostas contraditórias sobre o mesmo assunto</td></tr>
+        <tr><td>Mudança na população de usuários</td><td>Lançamento no WhatsApp traz mensagens curtas e informais</td><td>Não</td><td>Distribuição das entradas, PSI</td></tr>
+        <tr><td>Mudança em ferramenta ou API</td><td>A API de frete troca <code>prazo_dias</code> por <code>data_prevista</code></td><td>No pipeline de outro time</td><td>Erro em chamada de ferramenta</td></tr>
+      </tbody>
+    </table>
+    <p>Nenhuma das cinco linhas tem "sim" garantido na terceira coluna. Quase tudo acontece sem passar pelo teste que você escreveu antes do go-live.</p>
+
+    <h2>Alias, snapshot e a data que você não marcou no calendário</h2>
+    <p>Provedores de modelo costumam oferecer dois tipos de identificador. O <strong>snapshot</strong> é uma versão datada e fixa, algo como <code>modelo-x-2026-02-14</code>. O <strong>alias</strong> é um nome genérico, como <code>modelo-x</code> ou <code>modelo-x-latest</code>, que aponta para algum snapshot e pode ser reapontado pelo provedor quando sai uma versão nova. Usar o alias é cômodo: você ganha melhorias sem fazer nada. É também a fonte mais comum do caso da abertura.</p>
+    <p>A troca de comportamento entre versões do mesmo nome não é teoria. O estudo mais citado é "How is ChatGPT's behavior changing over time?", de Lingjiao Chen, Matei Zaharia e James Zou (2023). Eles compararam as versões de março e de junho de 2023 do GPT-3.5 e do GPT-4 em tarefas fixas, como identificar números primos, responder perguntas sensíveis e gerar código. O desempenho mudou bastante em várias tarefas, para melhor e para pior, e uma das mudanças foi justamente de formato: código que antes saía pronto para executar passou a vir com marcação extra que impedia a execução direta. É o mesmo tipo de quebra do JSON embrulhado em markdown.</p>
+    <p>Minha regra: em produção, o modelo é chamado por snapshot. Isso tem custo, porque snapshots são aposentados numa data que o provedor anuncia. Fixar a versão não elimina a mudança. Transforma uma mudança silenciosa numa mudança agendada, com prazo, que passa pelo seu gate. O identificador fica no arquivo de configuração versionado, a data de aposentadoria vira tarefa com 60 dias de antecedência, e um detector compara, em todo trace, o modelo pedido com o modelo que respondeu.</p>
+    <p>O snapshot reduz muito a superfície de mudança, mas não cobre tudo o que fica do lado do provedor, como filtros de moderação ou infraestrutura que muda latência. Os detectores continuam necessários.</p>
+
+    <h2>Risco I×P×D: o problema é a detectabilidade</h2>
+    <p>Uso a mesma conta de risco em tudo: <strong>impacto × probabilidade × detectabilidade</strong>, de 1 a 5 cada. Detectabilidade alta quer dizer que a falha aparece tarde. Aplico ao cenário "a qualidade da feature cai em parte do tráfego sem que nenhum deploy nosso tenha causado isso".</p>
+    <ul>
+      <li><strong>Impacto (I):</strong> assistente de pós-venda que informa prazo de troca, status de pagamento e abre protocolo. Resposta errada vira reembolso indevido, reclamação formal e retrabalho no atendimento humano. Nota 4.</li>
+      <li><strong>Probabilidade (P):</strong> com alias, prompt editável em painel e índice reindexado toda noite, a chance de alguma das cinco fontes mudar num trimestre é quase certa. Nota 4.</li>
+      <li><strong>Detectabilidade (D):</strong> sem monitoramento específico, a descoberta vem por reclamação. No caso da abertura, nove dias. Nota 5.</li>
+    </ul>
+    <p>Resultado: 4 × 4 × 5 = <strong>80</strong>. Agora a mesma conta depois de três controles baratos: snapshot fixado e prompt no repositório (P cai para 2, porque as mudanças passam a ser deploys nossos, exceto população e APIs de terceiros), sinais de saída em 100% do tráfego e amostra diária julgada (D cai para 2, detecção em horas). Fica 4 × 2 × 2 = <strong>16</strong>. O impacto não mudou. Quase toda a redução veio de detectar cedo, e é nisso que o resto do artigo se concentra.</p>
+
+    <h2>Três drifts, três perguntas</h2>
+    <p><strong>Drift</strong>, ou deriva, é a mudança gradual ou súbita em alguma distribuição que o sistema assumia estável. A palavra é usada para três coisas diferentes, e misturá-las leva a investigar o lugar errado.</p>
+
+    <h3>Data drift: as perguntas mudaram</h3>
+    <p>Pergunta que responde: os usuários estão perguntando coisas diferentes, ou do mesmo jeito diferente? <strong>Data drift</strong> é a mudança na distribuição das entradas. Exemplo: em setembro, 15% das mensagens do assistente eram sobre pagamento. A empresa lança Pix parcelado, e em outubro são 30%. Cada pergunta, individualmente, tem a mesma resposta certa de antes. O que mudou foi o peso de cada tipo. Se o assistente acerta 95% das perguntas de rastreio e só 80% das de pagamento, a taxa geral cai sem que nada no modelo tenha mudado, só porque o tipo mais difícil ficou mais frequente.</p>
+
+    <h3>Concept drift: a resposta certa mudou</h3>
+    <p>Pergunta que responde: para a mesma pergunta, a resposta correta continua sendo a mesma? <strong>Concept drift</strong> é a mudança na relação entre entrada e resposta correta. Exemplo: o prazo de troca passa de 7 para 30 dias na campanha de fim de ano. "Comprei há 12 dias, posso trocar?" era "não" e agora é "sim". As entradas são idênticas; a verdade mudou. Se perguntas de troca são 20% do tráfego e o índice ainda tem só a política antiga, até 20% das respostas podem ficar erradas da noite para o dia. Nenhum detector de distribuição de entrada vê isso, porque a distribuição de entrada não mudou.</p>
+
+    <h3>Output drift: as respostas mudaram</h3>
+    <p>Pergunta que responde: para entradas parecidas, o sistema está respondendo de outro jeito? <strong>Output drift</strong> é a mudança na distribuição das saídas: tamanho, formato, tom, taxa de recusa, ferramentas chamadas. Exemplo ilustrativo: a mediana de tamanho da resposta sai de 80 para 140 tokens (token é o pedaço de texto que o modelo processa, mais ou menos três quartos de uma palavra em português) e a taxa de recusa sai de 1,2% para 4,5%. Output drift é quase sempre o primeiro a aparecer depois de troca de modelo ou de prompt. Ele não prova que a qualidade caiu. Prova que algo mudou e que vale olhar.</p>
+    <p>Data drift aponta para população, concept drift para regra de negócio ou índice, output drift para modelo, prompt ou ferramenta. Saber qual apareceu corta a investigação pela metade.</p>
+
+    <h2>Medindo deriva de entrada: PSI e centroide de embedding</h2>
+
+    <h3>PSI com a conta na mão</h3>
+    <p>Pergunta que responde: a distribuição desta semana é parecida com a de referência? O <strong>PSI</strong> (Population Stability Index, índice de estabilidade da população) vem da área de risco de crédito, onde é usado há décadas para saber se a população que pede crédito hoje ainda parece com a que treinou o modelo de score. Ele compara duas distribuições divididas nas mesmas faixas. Para cada faixa, pega a proporção de referência <em>e</em> e a proporção atual <em>a</em> e soma:</p>
+    <p><code>PSI = soma de (a − e) × ln(a ÷ e)</code></p>
+    <p>Em LLM, as faixas podem ser categorias de intenção (classificadas por um modelo pequeno ou por regra), faixas de tamanho da mensagem, idioma ou canal. Exemplo com intenção, referência de setembro contra a semana do lançamento do Pix parcelado:</p>
+    <ul>
+      <li><strong>Rastreio:</strong> e = 0,40, a = 0,30. (0,30 − 0,40) × ln(0,75) = −0,10 × −0,2877 = <strong>0,0288</strong>.</li>
+      <li><strong>Troca:</strong> e = 0,20, a = 0,20. Diferença zero, contribuição <strong>0</strong>.</li>
+      <li><strong>Pagamento:</strong> e = 0,15, a = 0,30. 0,15 × ln(2) = 0,15 × 0,6931 = <strong>0,1040</strong>.</li>
+      <li><strong>Cancelamento:</strong> e = 0,15, a = 0,12. −0,03 × ln(0,8) = −0,03 × −0,2231 = <strong>0,0067</strong>.</li>
+      <li><strong>Outros:</strong> e = 0,10, a = 0,08. −0,02 × −0,2231 = <strong>0,0045</strong>.</li>
+    </ul>
+    <p>Soma: 0,0288 + 0 + 0,1040 + 0,0067 + 0,0045 ≈ <strong>0,144</strong>. A convenção herdada do crédito é: abaixo de 0,1, estável; entre 0,1 e 0,25, mudança moderada que merece investigação; acima de 0,25, mudança relevante. Os limiares são regra de bolso, não lei. Com 0,144, eu não acordo ninguém, mas abro o detalhamento por faixa. A faixa de pagamento sozinha responde por 72% do índice. É ali que preciso conferir se o índice de documentos sabe o que é Pix parcelado.</p>
+    <p>O cálculo cabe em poucas linhas. O <code>eps</code> evita logaritmo de zero quando uma faixa fica vazia:</p>
+<pre><code>import math
+
+def psi(esperado, atual, eps=1e-4):
+    """Proporções por faixa, na mesma ordem, cada lista somando 1."""
+    total = 0.0
+    for e, a in zip(esperado, atual):
+        e, a = max(e, eps), max(a, eps)
+        total += (a - e) * math.log(a / e)
+    return total
+
+# rastreio, troca, pagamento, cancelamento, outros
+setembro = [0.40, 0.20, 0.15, 0.15, 0.10]
+semana   = [0.30, 0.20, 0.30, 0.12, 0.08]
+print(round(psi(setembro, semana), 3))  # 0.144</code></pre>
+    <p>Dois cuidados. PSI com amostra pequena oscila: com 200 mensagens por semana, uma faixa de 5% tem 10 mensagens e o índice pula por acaso, então uso alguns milhares por janela. E meço o PSI semanal por algumas semanas antes de criar alerta. Se o normal fica entre 0,02 e 0,05, um 0,144 é notícia; se a sazonalidade leva a 0,12, não é.</p>
+
+    <h3>Distância de centroide de embedding</h3>
+    <p>Categoria de intenção só enxerga o que você já previu. Para mudança que não cabe em nenhuma categoria, uso embedding. <strong>Embedding</strong> é a transformação de um texto numa lista de números, de forma que textos com significado parecido fiquem próximos (explico com mais calma em <a href="llm-rag-mapa-de-conceitos-antes-do-eval.html">LLM e RAG sem jargão</a>). O <strong>centroide</strong> é a média desses vetores num período: o "ponto central" das mensagens da semana.</p>
+    <p>O detector compara o centroide da semana com o da referência usando <strong>distância de cosseno</strong>, que vai de 0 (mesma direção) a 2 (direções opostas) e, para textos do mesmo domínio, fica perto de zero. Exemplo ilustrativo: semana contra semana, a distância costuma ficar entre 0,01 e 0,02. No lançamento do canal de WhatsApp, foi 0,06. As mensagens eram mais curtas ("cadê meu pedido"), com mais gíria e mais áudio transcrito.</p>
+    <p>O limite: média esconde grupo pequeno. Se 3% das mensagens viram um assunto novo, o centroide quase não se move. Complemento com a fração de mensagens longe de qualquer vizinho da referência. Quando ela sobe, leio 30 dessas mensagens. É a leitura que transforma "o vetor mexeu" em "os clientes estão perguntando sobre o recall do produto X".</p>
+
+    <h2>Sinais de saída que custam quase nada</h2>
+    <p>Os sinais abaixo rodam em 100% do tráfego, sem modelo julgando, a partir de dados que já deveriam estar no trace. Pegam boa parte das mudanças de modelo, prompt e ferramenta em minutos. Os limiares são ilustrativos; os reais saem do seu histórico.</p>
+    <table>
+      <thead>
+        <tr><th>Sinal</th><th>Pergunta que responde</th><th>Como calcular</th><th>Alerta ilustrativo</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Tamanho da resposta</td><td>O modelo ficou prolixo ou seco?</td><td>Mediana e p95 de tokens de saída por hora</td><td>Mediana ±30% contra a mesma hora da semana anterior</td></tr>
+        <tr><td>Taxa de recusa</td><td>Está se negando a responder o que respondia?</td><td>Classificador ou regex de recusa sobre a saída</td><td>+2 pontos sobre a linha de base</td></tr>
+        <tr><td>Violação de formato</td><td>A saída ainda respeita o contrato?</td><td>Falha de validação do JSON Schema</td><td>Acima de 1% em uma hora com pelo menos 500 respostas</td></tr>
+        <tr><td>Erro em chamada de ferramenta</td><td>O modelo e as APIs ainda se entendem?</td><td>Argumento inválido, ferramenta inexistente ou erro da API, dividido pelo total de chamadas</td><td>O dobro da linha de base</td></tr>
+        <tr><td>Custo e tokens por requisição</td><td>A conta mudou?</td><td>Tokens de entrada e saída vezes preço, por requisição</td><td>+20% no custo médio diário</td></tr>
+        <tr><td>Latência p95</td><td>O usuário está esperando mais?</td><td>Tempo da requisição ao fim da resposta, percentil 95</td><td>+30% sustentado por 30 minutos</td></tr>
+      </tbody>
+    </table>
+    <p><strong>p95</strong> é o valor abaixo do qual ficam 95% das medições. Latência p95 de 4 segundos quer dizer que 1 em cada 20 usuários espera mais que isso. Uso p95 em vez de média porque média de latência esconde a cauda, e a cauda é quem abre chamado. O mesmo raciocínio, aplicado a performance clássica, está em <a href="performance-testing-continuo-p99.html">performance testing contínuo</a>.</p>
+    <p>No caso da abertura, a linha de violação de formato teria disparado na primeira hora. O painel existia. Faltava o alerta e faltava um dono.</p>
+
+    <h2>Avaliação online: amostra, juiz e a conta do tamanho</h2>
+    <p>Sinais de saída dizem que algo mudou, não se a resposta está certa. Para isso uso <strong>avaliação online</strong>: sortear uma amostra do tráfego de produção e avaliar cada resposta com uma rubrica (a lista de critérios com o que conta como aprovado em cada um). Quem avalia é um LLM como juiz, um modelo que lê pergunta, contexto e resposta e dá um veredito pela rubrica, mais uma subamostra revisada por gente. Como calibrar o juiz está em <a href="llm-como-juiz-quando-confiar-na-nota.html">LLM como juiz: quando dá para confiar na nota</a>. Aqui o foco é quanta amostra.</p>
+
+    <h3>Quantas respostas para ver uma queda de 92% para 88%</h3>
+    <p>Suponha que a taxa de aprovação histórica, medida com muita amostra, é 92%. Quero perceber se ela caiu para 88%. A conta padrão para uma proporção contra um valor de referência, com 95% de confiança (z = 1,96) e 80% de chance de detectar a queda se ela for real (z = 0,84), é:</p>
+<pre><code>n = ( (1,96 × raiz(p0 × q0) + 0,84 × raiz(p1 × q1)) / (p0 - p1) )²
+
+p0 = 0,92  q0 = 0,08   raiz(0,0736) = 0,2713
+p1 = 0,88  q1 = 0,12   raiz(0,1056) = 0,3250
+
+n = ( (0,5317 + 0,2730) / 0,04 )²
+  = ( 20,12 )²
+  ≈ 405 respostas julgadas</code></pre>
+    <p>Esses 80% têm nome: <strong>poder estatístico</strong>, a chance de a amostra mostrar a queda quando ela existe. Se a referência também vem de amostra, por exemplo comparando duas versões em paralelo, a conta passa a ser de duas proporções e dá cerca de 880 respostas por grupo. Ordem de grandeza para guardar: algumas centenas para ver 4 pontos, perto de mil para comparar duas versões vivas.</p>
+
+    <h3>O intervalo que vai no relatório</h3>
+    <p>A amostra do dia teve 400 respostas julgadas, 352 aprovadas: 88%. O erro padrão binomial é raiz(0,88 × 0,12 ÷ 400) = raiz(0,000264) ≈ 0,0162. O intervalo de cerca de 95% é 88% ± 1,96 × 1,62 pontos, ou seja, de <strong>84,8% a 91,2%</strong>. A referência, 92%, ficou fora do intervalo, por pouco. Leio assim: há sinal de queda, ainda não é certeza de 4 pontos, vale abrir as 48 reprovadas hoje e não daqui a uma semana.</p>
+    <p>A mesma conta mostra por que revisão humana sozinha não serve de detector: com 100 respostas, o erro padrão perto de 90% é 3 pontos, e uma queda de 4 some no intervalo. Divido o trabalho assim:</p>
+    <ul>
+      <li><strong>Juiz em 400 respostas aleatórias por dia.</strong> Detecta tendência.</li>
+      <li><strong>Cota fixa para categorias raras e caras:</strong> cancelamento com reembolso é 3% do tráfego, então entra com 50 por dia. Sem a cota, chegam 12 e nunca formam sinal.</li>
+      <li><strong>Humano em 40 por dia</strong>, metade entre aprovadas pelo juiz e metade entre reprovadas. Serve para conferir o juiz e ler o motivo das falhas, não para estimar a taxa.</li>
+    </ul>
+    <p>O tamanho da amostra define o tempo de detecção. Com 400 por dia, uma queda de 4 pontos aparece em um dia. Com 50 por dia, leva oito. Detectar mais rápido custa mais juiz, e essa conta precisa ser feita em voz alta.</p>
+
+    <h2>Antes de virar a chave: shadow, canary e A/B</h2>
+    <p>Quando a mudança é sua (novo snapshot, novo prompt, novo índice), dá para medir antes de expor todo mundo. São três técnicas com propósitos diferentes.</p>
+
+    <h3>Shadow traffic</h3>
+    <p>Pergunta que responde: como a versão nova responderia ao tráfego real, sem que ninguém veja? No <strong>shadow traffic</strong>, uma cópia de cada requisição real (ou de uma fração) vai também para a versão candidata. A resposta dela é registrada e descartada; o usuário só vê a versão atual. Depois comparo as duas no mesmo par de entrada: violação de formato, tamanho, custo, latência e um julgamento pareado de qual resposta é melhor pela rubrica.</p>
+    <p>Limites: não há reação do usuário, porque ninguém leu a resposta candidata. Ferramentas com efeito colateral, como emitir reembolso, viram dublês na versão sombra, senão você reembolsa duas vezes. E o custo de modelo dobra na fração espelhada, então começo com 10% do tráfego por três dias.</p>
+
+    <h3>Canary com rollback automático</h3>
+    <p>Pergunta que responde: a versão nova aguenta usuários reais sem quebrar nada grosseiro? No <strong>canary</strong>, uma fração pequena dos usuários reais passa a ser atendida pela versão nova, e a fração cresce em etapas se os sinais ficarem limpos. O valor está no critério de rollback escrito antes, executado por máquina, sem reunião:</p>
+<pre><code>canary:
+  candidato: manifesto-2026-11-r14
+  etapas_percentual: [1, 5, 25, 100]
+  duracao_minima_por_etapa: 24h
+  amostra_minima_por_etapa: 2000      # requisições antes de avaliar
+  rollback_automatico_se:             # candidato comparado ao controle
+    violacao_formato_pp: 1.0          # pontos percentuais acima
+    erro_tool_call_razao: 2.0         # vezes o controle
+    recusa_pp: 2.0
+    latencia_p95_razao: 1.3
+    custo_por_requisicao_razao: 1.2
+  promover_somente_se:
+    juiz_queda_max_pp: 2.0            # na amostra julgada da etapa
+    bloqueios_revisao_humana: 0</code></pre>
+    <p>Repare na divisão: rollback usa sinais de saída, disponíveis em minutos; promoção usa qualidade julgada, que precisa de amostra. Com 5% do tráfego, a amostra julgada precisa sobreamostrar o canary, senão 24 horas não juntam as centenas de respostas que a conta pede. Rollback rápido pelo que é barato medir, promoção lenta pelo que é caro.</p>
+
+    <h3>A/B com métricas de guardrail</h3>
+    <p>Pergunta que responde: a versão nova é melhor para o negócio? Num <strong>teste A/B</strong>, usuários são sorteados entre as duas versões por tempo suficiente para medir diferença numa métrica principal, como "atendimentos resolvidos sem transferência para humano". As <strong>métricas de guardrail</strong> são as que não podem piorar enquanto a principal melhora: taxa de reabertura, reclamação formal, custo por atendimento, latência p95. Uma versão que resolve 3 pontos a mais sem humano, mas aumenta a reabertura em 2 pontos, provavelmente está encerrando conversas cedo demais.</p>
+    <p>Canary é sobre segurança, A/B é sobre decisão. E A/B precisa da conta de duas proporções, perto de mil por grupo, rodando pelo menos uma semana completa, porque segunda-feira e domingo têm clientes diferentes.</p>
+
+    <h2>O gate de regressão para troca de modelo ou prompt</h2>
+    <p>Antes de qualquer shadow ou canary, a mudança passa pelo <strong>gate de regressão</strong>: uma suíte de avaliação offline que precisa passar para a mudança seguir. O núcleo dela é o <strong>golden set</strong>, o conjunto versionado de casos com entrada, contexto e critério de aprovação, que descrevo em <a href="avaliando-llm-rag-sem-prompt-theatre.html">Avaliando LLM/RAG sem prompt theatre</a>. O que muda depois do go-live é o gatilho: o gate dispara em toda mudança no manifesto (snapshot, prompt, temperatura, versão do índice, modelo de embedding, schema de ferramenta), não só em PR de código.</p>
+    <p>Dois cuidados específicos de troca de modelo:</p>
+    <ul>
+      <li><strong>Temperatura não é determinismo.</strong> Temperatura é o parâmetro que controla quanta aleatoriedade entra na escolha de cada token. Temperatura 0 reduz a variação, mas muitos provedores não garantem saída idêntica entre chamadas. Por isso rodo cada caso crítico k vezes e exijo que todas passem, a métrica <code>pass^k</code>. Com 95% de acerto por execução, <code>pass^3</code> = 0,95³ ≈ 0,857. A conta completa está em <a href="testando-agentes-de-ia.html">Agente de IA não é chatbot</a>.</li>
+      <li><strong>Comparação pareada, não média contra média.</strong> As duas versões rodam nos mesmos casos, e eu conto quantos passaram de aprovado para reprovado. Com 300 casos, a média pode cair só 1 ponto e esconder 9 casos de política que pioraram enquanto 6 de estilo melhoraram. Qualquer caso crítico que piorou bloqueia, independentemente da média.</li>
+    </ul>
+    <p>Todo incidente de produção vira caso no golden set em até 48 horas. O JSON embrulhado em markdown da abertura virou cinco casos de formato, e um teste determinístico de schema que roda antes de qualquer juiz.</p>
+
+    <h2>Feedback do usuário: sinal útil, amostra torta</h2>
+    <p>Todo produto com LLM acaba tendo polegar para cima e para baixo. Tem também sinais indiretos: transferência para atendente humano, ticket reaberto em até 7 dias (<strong>taxa de reabertura</strong>), cliente que repete a mesma pergunta com outras palavras. Uso todos. Não confio em nenhum sozinho, porque cada um tem um viés conhecido.</p>
+    <ul>
+      <li><strong>Viés de seleção:</strong> só uma fração pequena vota, digamos 3% num exemplo ilustrativo, e quem vota tende a estar muito irritado ou muito satisfeito.</li>
+      <li><strong>Quem foi embora não vota:</strong> o cliente que desistiu não deixa polegar nem reabre ticket. Uma piora grande pode até reduzir reclamação registrada.</li>
+      <li><strong>Interface muda o número:</strong> mover o botão de feedback muda a taxa de voto mais do que trocar o modelo. Escalonamento cai quando o botão "falar com atendente" some de uma tela.</li>
+      <li><strong>Laço de realimentação:</strong> se respostas bem votadas viram exemplos no prompt, o sistema aprende a agradar quem vota.</li>
+    </ul>
+    <p>Por isso normalizo pelo tráfego (polegares para baixo por mil respostas, com a taxa de voto ao lado) e anoto toda mudança de interface na mesma linha do tempo dos alertas.</p>
+
+    <h2>Manifesto de release: prompt e configuração como código</h2>
+    <p>Nada disso funciona se ninguém sabe o que estava em produção numa hora específica. O controle mais barato do artigo é o <strong>manifesto de release</strong>: um arquivo versionado no repositório com tudo o que define o comportamento da feature. Snapshot do modelo, hash do prompt de sistema, temperatura, limite de tokens, versão do índice e do modelo de embedding, versão do schema de cada ferramenta, versão do juiz e da rubrica. O manifesto ganha um identificador, e esse identificador viaja em cada requisição.</p>
+    <p>Com isso, mudar prompt passa a ser abrir PR, o PR que muda o manifesto dispara o gate de regressão no CI, e, no incidente, "o que mudou?" vira um diff entre dois manifestos, não uma enquete no canal do time.</p>
+
+    <h3>Trace que diz qual modelo respondeu</h3>
+    <p><strong>Trace</strong> é o registro de uma requisição de ponta a ponta, dividido em <strong>spans</strong>, um por operação: busca no índice, chamada ao modelo, chamada de ferramenta. O <strong>OpenTelemetry</strong> é o padrão aberto para gerar esses dados (detalho em <a href="observabilidade-como-ferramenta-de-qa.html">Quando o teste falha e ninguém sabe por quê</a>), e tem convenções semânticas específicas para IA generativa: nomes padronizados de atributos para chamadas de modelo. As que mais uso:</p>
+    <ul>
+      <li><code>gen_ai.request.model</code> e <code>gen_ai.response.model</code>: o modelo pedido e o modelo que o provedor diz ter usado. Quando você pede um alias, o segundo costuma trazer o snapshot real. É o atributo que teria resolvido o caso da abertura em uma hora: alerta quando o valor de <code>gen_ai.response.model</code> muda sem mudança de manifesto.</li>
+      <li><code>gen_ai.usage.input_tokens</code> e <code>gen_ai.usage.output_tokens</code>: base do sinal de tamanho e de custo.</li>
+      <li><code>gen_ai.request.temperature</code> e <code>gen_ai.response.finish_reasons</code>: o segundo diz por que a geração parou, por exemplo por limite de tokens, o que explica JSON cortado no meio.</li>
+      <li><code>gen_ai.tool.name</code>, nos spans de ferramenta: base da taxa de erro por ferramenta.</li>
+    </ul>
+    <p>Por cima, acrescento id do manifesto, versão do índice e categoria de intenção. As convenções GenAI ainda estão marcadas como em desenvolvimento e já renomearam atributos, então fixo a versão da instrumentação. Conteúdo de prompt e resposta fica fora do trace por padrão, porque carrega dado pessoal; a avaliação online lê esse conteúdo de um armazenamento com retenção e acesso controlados.</p>
+    <p>Nada disso é novo. O "ML Test Score", de Breck e coautores no Google (2017), já colocava monitoramento como parte da prontidão para produção, ao lado de testes de dados, de modelo e de infraestrutura, com itens que se aplicam quase sem adaptação a LLM: perceber quando a entrada muda e quando a qualidade regride.</p>
+
+    <h2>Runbook: "o modelo piorou"</h2>
+    <p>Quando chega a frase "o assistente está pior", seja por alerta, por chamado ou pelo diretor no corredor, sigo um roteiro com tempos. Os tempos são meta, contados a partir do primeiro sinal.</p>
+    <ol>
+      <li><strong>T+0 a T+15 min: confirmar que não é o instrumento.</strong> O juiz mudou de versão? A amostragem quebrou? O painel mudou de consulta? Uma parte boa dos alarmes de "piorou" que já vi era o medidor.</li>
+      <li><strong>T+15 a T+45 min: achar o que mudou.</strong> Na ordem: <code>gen_ai.response.model</code> nos traces das últimas 72 horas, diff de manifesto, última reindexação, changelog das APIs de ferramenta, PSI de intenção e de canal. Cada uma das cinco fontes tem um lugar para olhar.</li>
+      <li><strong>T+45 min a T+2 h: mitigar antes de entender tudo.</strong> Mudança nossa: volta o manifesto anterior. Alias do provedor: fixa o snapshot anterior enquanto ele existir. Índice: volta a versão anterior. População: não há rollback, a mitigação é roteamento, por exemplo mandar a categoria nova para atendente humano.</li>
+      <li><strong>T+2 h a T+8 h: medir o estrago.</strong> Quantas respostas saíram no período e uma amostra julgada de 400 para estimar a taxa de erro com intervalo. "Cerca de 1.900 respostas sem protocolo, intervalo de 1.700 a 2.100" é o que o atendimento precisa para decidir se contata clientes.</li>
+      <li><strong>Até T+24 h: comunicar</strong> atendimento, produto e, se houve promessa errada ao cliente, jurídico. Com números.</li>
+      <li><strong>Até T+5 dias: fechar o ciclo.</strong> Pós-incidente sem culpado, casos novos no golden set, detector novo, e a pergunta que mais importa: por que levou o tempo que levou para detectar?</li>
+    </ol>
+
+    <h2>Anti-padrões</h2>
+    <ul>
+      <li>Chamar o modelo por alias em produção "para ganhar as melhorias automaticamente".</li>
+      <li>Prompt de sistema morando em painel de ferramenta ou variável de ambiente, editado sem PR.</li>
+      <li>Reindexar toda noite sem checar se a política antiga continua no índice.</li>
+      <li>Painel de sinais de saída sem alerta e sem dono.</li>
+      <li>Gate de regressão que só roda em PR de código, enquanto troca de snapshot e de prompt passam por fora.</li>
+      <li>Revisar 50 respostas por semana e chamar isso de monitoramento de qualidade.</li>
+      <li>Canary com critério de rollback decidido na hora, em reunião, olhando o gráfico.</li>
+    </ul>
+
+    <h2>Seis controles para ligar antes da próxima troca de modelo</h2>
+    <p>Não precisa de plataforma de observabilidade de IA para começar. Precisa de um arquivo, alguns alertas e uma conta de amostra feita uma vez.</p>
+    <ol>
+      <li><strong>Troque alias por snapshot</strong> em toda chamada de produção, registre a data de aposentadoria anunciada e crie a tarefa de migração com 60 dias de antecedência.</li>
+      <li><strong>Crie o manifesto de release</strong> com modelo, prompt, temperatura, índice, embedding e schemas de ferramenta. Mova o prompt para o repositório e faça qualquer mudança no manifesto disparar o golden set no CI.</li>
+      <li><strong>Instrumente com as convenções GenAI do OpenTelemetry</strong>, incluindo <code>gen_ai.response.model</code> e o id do manifesto, e crie o alerta de modelo respondente diferente do esperado.</li>
+      <li><strong>Ligue os seis sinais de saída com alerta e dono:</strong> tamanho, recusa, formato, erro de ferramenta, custo e latência p95. Calibre os limiares com duas semanas de histórico.</li>
+      <li><strong>Faça a conta de amostra para a queda que importa</strong> no seu produto, monte a amostra diária julgada com sobreamostra das categorias caras e imprima o intervalo ao lado de toda taxa.</li>
+      <li><strong>Escreva o runbook e o critério de rollback do canary antes do próximo upgrade</strong>, e ensaie o rollback uma vez em horário comercial, medindo quanto tempo leva de fato.</li>
+    </ol>
+
+    <p>O provedor vai trocar o modelo, alguém vai editar o prompt, o índice vai ganhar documento velho e os clientes vão mudar o jeito de perguntar. Nada disso dá para impedir. O que dá para decidir é se a próxima mudança aparece primeiro num alerta com o nome do modelo novo, ou num chamado ameaçando ir ao Procon nove dias depois.</p>
+
+    <div class="article__foot">
+      <a href="../index.html#artigos">← Voltar aos artigos</a>
+    </div>
+  </article>
+</body>
+</html>
