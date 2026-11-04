@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LLM como juiz: quando dá para confiar na nota — Leandro Lima</title>
+  <meta name="description" content="LLM-as-a-judge com disciplina de medição: pointwise e pairwise, rubrica com âncoras, calibração contra rótulo humano, Cohen's kappa calculado à mão, precisão e recall do juiz, vieses de posição, verbosidade e autopreferência, estabilidade, drift de versão e gate com intervalo de confiança." />
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="article.css" />
+  <link rel="stylesheet" href="../covers.css?v=12" />
+</head>
+<body>
+  <header class="top">
+    <a class="top__brand" href="../index.html">Leandro Lima</a>
+    <a href="../index.html#artigos">← Artigos</a>
+  </header>
+  <article class="article">
+    <div class="cover cover--scale" aria-hidden="true">
+      <span class="cover__n">16</span>
+      <span class="cover__a"></span>
+      <span class="cover__b"></span>
+      <span class="cover__c"></span>
+    </div>
+    <span class="article__tag">AI QA</span>
+    <h1>LLM como juiz: quando dá para confiar na nota</h1>
+    <p class="article__meta">Leitura ~20 min · Quality Engineering</p>
+
+    <p>O painel do eval mostrava a nota média do assistente de seguros subindo de 4,4 para 4,6 depois da troca de prompt. Gate verde, merge feito. Na mesma semana, a analista que revisa 20 conversas por sprint abriu a planilha dela e marcou 3 respostas como erradas. Uma delas dizia ao cliente que ele podia cancelar a apólice em até 30 dias com reembolso integral. A política diz 7 dias. O juiz tinha dado 5 de 5, com a justificativa "resposta clara, completa e empática".</p>
+    <p>Os dois painéis estavam certos sobre o que mediam. O do juiz media se a resposta parecia boa. O da analista media se a resposta estava certa. O problema é que o gate de merge só olhava o primeiro.</p>
+    <p>Nos artigos anteriores eu apresentei rubrica, golden set e juiz de passagem, em <a href="llm-rag-mapa-de-conceitos-antes-do-eval.html">LLM e RAG sem jargão</a> e em <a href="avaliando-llm-rag-sem-prompt-theatre.html">Avaliando LLM/RAG sem virar prompt theatre</a>. Aqui eu desço no juiz: como saber se ele mede o que você acha que mede, quanto confiar no número que ele devolve e quando ele não deveria estar ali.</p>
+
+    <div class="callout">
+      <p>Juiz que nunca foi comparado com uma pessoa não é oráculo. É mais um sistema sob teste, só que com permissão para aprovar os outros.</p>
+    </div>
+
+    <h2>Por que um modelo corrigindo outro</h2>
+    <p>A pergunta que leva times ao juiz é de escala. Um golden set de 400 casos, rodado a cada PR que mexe em prompt, modelo ou retrieval, com umas 15 rodadas por semana, dá 6.000 respostas para corrigir. Se uma pessoa leva 2 minutos por resposta lendo a política e conferindo, são 200 horas por semana. Ninguém tem isso. Um modelo corrige as mesmas 6.000 em minutos, por uma fração do custo, e sem cansar na resposta 380.</p>
+    <p>O risco fica claro quando se lembra o que é um <strong>oráculo</strong> em teste: o mecanismo que decide se o resultado está certo. Num unitário, é o <code>assertEqual(total, 4990)</code>, determinístico e escrito por quem conhecia a regra. Com texto livre não existe <code>assertEqual</code>, e o juiz ocupa o lugar do oráculo.</p>
+    <p>Só que esse oráculo é probabilístico, tem preferências próprias e muda quando o fornecedor atualiza o modelo. Um assert que pode estar errado, e que ninguém confere, seria tratado como defeito em qualquer suíte tradicional. Em eval de LLM, virou prática normal.</p>
+
+    <h2>As palavras, com exemplo</h2>
+    <ul>
+      <li><strong>Juiz (LLM-as-a-judge):</strong> um modelo de linguagem que recebe a pergunta, a resposta do sistema e um critério, e devolve uma avaliação. Exemplo: recebe "posso cancelar em 30 dias?", a resposta do assistente e a instrução "a resposta respeita a política de cancelamento?", e devolve "não".</li>
+      <li><strong>Rubrica:</strong> a folha de correção que o juiz aplica. Lista os critérios e diz o que cada nota significa. "Nota 1: afirma prazo diferente do documento. Nota 3: prazo certo, sem mencionar a exceção de sinistro. Nota 5: prazo certo e exceção mencionada."</li>
+      <li><strong>Pointwise:</strong> o juiz olha uma resposta por vez e dá uma nota absoluta, por exemplo de 1 a 5. Serve para gate ("pelo menos 90% dos casos com nota 4 ou mais") e para acompanhar tendência.</li>
+      <li><strong>Pairwise:</strong> o juiz recebe duas respostas para a mesma pergunta, A e B, e diz qual é melhor, ou empate. Serve para comparar prompt atual contra candidato. Comparar costuma ser mais estável que pontuar no absoluto, mas não diz se as duas são ruins.</li>
+      <li><strong>Reference-based:</strong> o juiz recebe também uma resposta de referência aprovada por alguém. "A referência diz 7 dias, cláusula 4.2. A resposta diz 30." Mais confiável em fato, exige manter a referência atualizada.</li>
+      <li><strong>Reference-free:</strong> o juiz só tem pergunta, resposta e, às vezes, o contexto recuperado. Serve para tom, clareza ou apoio no contexto. É o modo mais barato e o mais exposto ao gosto do juiz.</li>
+      <li><strong>Conjunto de calibração:</strong> um pedaço do golden set, por exemplo 100 casos, em que uma ou mais pessoas aplicaram a mesma rubrica que o juiz aplica. É contra ele que o juiz é medido.</li>
+    </ul>
+    <p>No exemplo da abertura, o juiz era pointwise, reference-free e com uma rubrica de uma linha: "avalie a qualidade da resposta de 1 a 5". Três escolhas que, juntas, explicam o 5 de 5.</p>
+
+    <h2>Risco I×P×D de um juiz errado</h2>
+    <p>Pontuo o juiz como pontuo qualquer componente de teste: impacto, probabilidade e detectabilidade, de 1 a 5, multiplicados. Detectabilidade alta quer dizer difícil de perceber.</p>
+    <ul>
+      <li><strong>Impacto (I):</strong> o que acontece se o juiz aprovar uma regressão. No assistente de seguros, informação errada de cancelamento gera reclamação em órgão regulador e reembolso indevido. Nota 5.</li>
+      <li><strong>Probabilidade (P):</strong> chance de o juiz errar no critério que importa. Rubrica vaga, sem referência, avaliando fato de política: nota 4.</li>
+      <li><strong>Detectabilidade (D):</strong> o erro do juiz não gera alerta nenhum. O gate fica verde, a média até sobe. Só aparece quando alguém lê a conversa. Nota 5.</li>
+    </ul>
+    <p>Score 5 × 4 × 5 = <strong>100</strong>, o máximo da escala. O mesmo juiz, com rubrica decomposta, referência para os casos de política, calibração mensal contra rótulo humano e uma faixa de revisão humana no gate, cai para algo como 5 × 2 × 2 = <strong>20</strong>. O impacto não muda. Mudam a chance de o juiz errar e a chance de alguém perceber quando ele erra.</p>
+    <p>O que mais me preocupa é a direção do erro. Teste flaky que falha à toa irrita e é investigado. Juiz generoso que aprova à toa não irrita ninguém, e por isso dura meses.</p>
+
+    <h2>O juiz é um instrumento de medida</h2>
+    <p>Balança de farmácia passa por aferição: alguém coloca um peso conhecido e confere o que ela mostra. <strong>Meta-avaliação</strong> é a mesma ideia aplicada ao juiz: avaliar o avaliador, comparando a saída dele com um rótulo em que você confia, que normalmente é o de uma pessoa que conhece o domínio.</p>
+
+    <h3>Montando o conjunto de calibração</h3>
+    <p>Pego 100 casos do golden set, com mistura proposital: casos fáceis, casos de política, casos em que o sistema costuma errar e algumas respostas sabidamente ruins de versões antigas. Se o conjunto só tem respostas boas, qualquer juiz que diga "ok" para tudo parece perfeito. Duas pessoas rotulam cada caso com a mesma rubrica, sem ver a nota do juiz. Onde discordam, conversam e registram a decisão. É nessa conversa que a rubrica costuma melhorar.</p>
+    <p>Para começar, simplifico a pergunta para binária: a resposta é <strong>aceitável</strong> ou <strong>ruim</strong> para ir ao cliente? Nota de 1 a 5 vira binário com um corte, por exemplo nota 4 ou mais é aceitável.</p>
+
+    <h3>Concordância bruta e por que ela engana</h3>
+    <p>O primeiro número que todo mundo calcula é a <strong>concordância bruta</strong>: em quantos casos juiz e humano deram o mesmo rótulo. Um exemplo ilustrativo, com 100 casos:</p>
+    <table>
+      <thead>
+        <tr><th></th><th>Juiz: aceitável</th><th>Juiz: ruim</th><th>Total humano</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Humano: aceitável</td><td>70</td><td>8</td><td>78</td></tr>
+        <tr><td>Humano: ruim</td><td>12</td><td>10</td><td>22</td></tr>
+        <tr><td>Total juiz</td><td>82</td><td>18</td><td>100</td></tr>
+      </tbody>
+    </table>
+    <p>Concordaram em 70 + 10 = 80 casos: 80%. Parece bom. Agora imagine um juiz preguiçoso que responde "aceitável" para tudo, sem ler. Ele acerta os 78 aceitáveis e erra os 22 ruins: 78%, quase igual ao juiz "de verdade". Quando a maioria das respostas é boa, concordar é fácil, e a concordância bruta mistura acerto com sorte.</p>
+
+    <h3>Cohen's kappa, à mão</h3>
+    <p>O <strong>kappa de Cohen</strong>, proposto por Jacob Cohen em 1960, responde a uma pergunta melhor: quanto da concordância vai além do que dois avaliadores teriam por acaso, dado o quanto cada um usa cada rótulo? A fórmula é curta:</p>
+    <pre><code>kappa = (p_o - p_e) / (1 - p_e)
+
+p_o = concordância observada
+p_e = concordância esperada por acaso</code></pre>
+    <p><strong>Concordância observada:</strong> já temos, p<sub>o</sub> = 0,80.</p>
+    <p><strong>Concordância esperada:</strong> se juiz e humano rotulassem de forma independente, mantendo cada um a sua proporção, quantas vezes coincidiriam? O humano diz "aceitável" em 78% dos casos e o juiz em 82%. A chance de os dois dizerem "aceitável" ao acaso é 0,78 × 0,82 = 0,6396. A chance de os dois dizerem "ruim" é 0,22 × 0,18 = 0,0396. Somando: p<sub>e</sub> = 0,6792.</p>
+    <p><strong>Kappa:</strong> (0,80 − 0,6792) / (1 − 0,6792) = 0,1208 / 0,3208 = <strong>0,38</strong>.</p>
+    <p>Os 80% de concordância viraram 0,38. A maior parte do acordo era o que se esperaria de dois avaliadores que mal se olham, porque quase tudo é aceitável. Para o juiz preguiçoso, o kappa é exatamente 0: ele só concorda o que o acaso explica.</p>
+    <p>Depois de reescrever a rubrica (vou mostrar como mais adiante), o mesmo conjunto deu este resultado, também ilustrativo:</p>
+    <table>
+      <thead>
+        <tr><th></th><th>Juiz: aceitável</th><th>Juiz: ruim</th><th>Total humano</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Humano: aceitável</td><td>74</td><td>4</td><td>78</td></tr>
+        <tr><td>Humano: ruim</td><td>3</td><td>19</td><td>22</td></tr>
+        <tr><td>Total juiz</td><td>77</td><td>23</td><td>100</td></tr>
+      </tbody>
+    </table>
+    <p>p<sub>o</sub> = 0,93. p<sub>e</sub> = 0,78 × 0,77 + 0,22 × 0,23 = 0,6006 + 0,0506 = 0,6512. Kappa = (0,93 − 0,6512) / (1 − 0,6512) = 0,2788 / 0,3488 = <strong>0,80</strong>.</p>
+
+    <h3>O que 0,4 e 0,8 querem dizer na prática</h3>
+    <p>Não existe corte universal, e kappa depende da proporção de casos ruins no conjunto. A leitura que eu uso para decidir o papel do juiz é esta:</p>
+    <ul>
+      <li><strong>Kappa perto de 0,4:</strong> o juiz capta alguma coisa, mas discorda do humano num número de casos que muda decisão. Uso só como indicador de tendência num painel, nunca para bloquear ou liberar merge.</li>
+      <li><strong>Kappa entre 0,6 e 0,7:</strong> serve para triagem, com humano revisando a faixa de dúvida. A maior parte do trabalho manual some, mas alguém ainda olha.</li>
+      <li><strong>Kappa perto de 0,8 ou acima:</strong> concordância parecida com a que costumo ver entre duas pessoas treinadas na mesma rubrica. Aí eu aceito o juiz no gate, desde que a próxima métrica também esteja boa.</li>
+    </ul>
+    <p>Um detalhe útil: calcule o kappa entre os dois humanos também. Se as duas pessoas têm kappa de 0,55 entre si, o problema é a rubrica, e nenhum juiz vai passar disso de forma honesta.</p>
+
+    <h3>Precisão e recall do juiz para "resposta ruim"</h3>
+    <p>Kappa diz se juiz e humano concordam. Para um gate, a pergunta é mais específica: <strong>quando a resposta é ruim, o juiz pega?</strong> Para isso trato o juiz como um classificador cuja classe positiva é "ruim".</p>
+    <ul>
+      <li><strong>Recall:</strong> dos casos que o humano marcou como ruins, quantos o juiz também marcou. Na primeira tabela: 10 de 22, ou <strong>45%</strong>. O juiz deixou passar 12 respostas ruins de 22. É este número que explica a abertura.</li>
+      <li><strong>Precisão:</strong> dos casos que o juiz marcou como ruins, quantos eram mesmo. Primeira tabela: 10 de 18, ou <strong>56%</strong>. Quase metade dos alarmes era falso.</li>
+    </ul>
+    <p>Na segunda tabela: recall de 19 de 22 (<strong>86%</strong>) e precisão de 19 de 23 (<strong>83%</strong>).</p>
+    <p>Para um gate, recall pesa mais. Precisão baixa custa tempo: alguém revisa um alarme falso e libera. Recall baixo custa cliente: a resposta ruim passa com carimbo de aprovada. Meu mínimo para deixar um juiz bloquear merge em critério de política é recall acima de 85%, com precisão acima de 70% para o time não aprender a ignorar o vermelho. São números meus, ajustados ao risco do domínio; num chatbot de receitas eu aceitaria menos.</p>
+
+    <h2>Três vieses que você consegue testar</h2>
+    <p>O trabalho mais citado sobre o tema é <em>Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena</em>, de Zheng e coautores, publicado em 2023. Os autores compararam julgamentos de modelos com preferências humanas e registraram que um juiz forte chega a concordar com humanos em nível parecido com o de humanos entre si. No mesmo paper, documentaram vieses que qualquer time consegue reproduzir em uma tarde. Três deles importam para quem usa juiz em gate.</p>
+
+    <h3>Viés de posição</h3>
+    <p>No modo pairwise, o juiz tende a preferir a resposta que aparece numa posição específica, muitas vezes a primeira, independentemente do conteúdo.</p>
+    <p><strong>Teste:</strong> pegue 100 pares e rode o juiz duas vezes, uma com a ordem A, B e outra com B, A. Conte em quantos pares o veredito troca junto com a ordem, ou seja, o juiz escolhe "a primeira" nas duas rodadas. Num exemplo ilustrativo, 23 de 100 pares deram veredito inconsistente. Isso quer dizer que, em quase um quarto das comparações, a decisão foi tomada pela ordem, não pela resposta.</p>
+
+    <h3>Viés de verbosidade</h3>
+    <p>O juiz tende a dar nota maior para a resposta mais longa, mesmo quando o texto extra não acrescenta informação. No paper, os autores mostraram isso inflando respostas com repetição de conteúdo já presente.</p>
+    <p><strong>Teste:</strong> pegue 50 respostas com nota 3 em completude e gere uma versão de cada com dois parágrafos de enchimento: reformulação, empatia genérica, "espero ter ajudado". Nenhum fato novo. Se a nota média do juiz sobe, digamos, de 3,1 para 3,8, ele está pagando por palavra. A resposta do prazo errado tinha exatamente isso: um parágrafo inteiro de acolhimento.</p>
+
+    <h3>Viés de autopreferência</h3>
+    <p>Um juiz tende a favorecer respostas geradas por ele mesmo ou por modelos da mesma família, que escrevem no estilo que ele reconhece como bom. O paper registra sinal disso para alguns modelos, com a ressalva de que os dados eram limitados para concluir com força. Eu trato como risco a testar, não como fato garantido para o seu par de modelos.</p>
+    <p><strong>Teste:</strong> 60 perguntas com respostas de dois geradores, um da família do juiz e um de outra, todas rotuladas por humano. Se o humano aprova 80% de cada grupo e o juiz aprova 92% de um e 79% do outro, há preferência, e ela aparece no grupo da família dele.</p>
+
+    <h3>Mitigações</h3>
+    <ul>
+      <li><strong>Trocar a ordem e combinar:</strong> no pairwise, rode as duas ordens e só conte vitória quando os dois vereditos concordam; o resto vira empate ou revisão. Custa o dobro de chamadas.</li>
+      <li><strong>Controle de tamanho:</strong> a rubrica diz que comprimento não é critério e que texto sem fato novo conta contra clareza. Acompanhe a correlação entre tamanho e nota entre versões.</li>
+      <li><strong>Família diferente:</strong> o juiz não deve ser da família do gerador. Quando não dá, o conjunto de calibração precisa ter respostas desse gerador, para o viés aparecer no kappa.</li>
+      <li><strong>Rubrica com âncoras:</strong> quanto mais o critério depende de gosto, mais espaço para viés. É o assunto da próxima seção.</li>
+    </ul>
+
+    <h2>Rubrica que mede alguma coisa</h2>
+    <p>"Avalie a qualidade de 1 a 10" é pedir ao juiz que invente o próprio critério a cada chamada. A diferença entre 6 e 7 não existe para ninguém, nem para o humano que vai calibrar. Três regras mudaram mais o meu kappa do que qualquer troca de modelo.</p>
+
+    <h3>Escala pequena, com âncora</h3>
+    <p>Prefiro binário (passa ou não passa) ou no máximo 3 a 5 níveis. Cada nível tem uma <strong>âncora</strong>: uma descrição observável do que precisa estar na resposta para merecer aquela nota, de preferência com um exemplo real ao lado. "Nota 3: o prazo está correto, mas a exceção para sinistro aberto não foi mencionada." Duas pessoas lendo essa âncora chegam à mesma nota. Duas pessoas lendo "boa resposta" não chegam.</p>
+
+    <h3>Decompor em critérios</h3>
+    <p>Uma nota única de "qualidade" esconde qual critério falhou e deixa um ponto forte compensar um fatal. Divido em critérios independentes, cada um com sua pergunta:</p>
+    <ul>
+      <li><strong>Factual:</strong> os fatos afirmados batem com a referência ou com a política?</li>
+      <li><strong>Fundamentado:</strong> cada afirmação está apoiada no contexto recuperado, ou o modelo trouxe algo de fora?</li>
+      <li><strong>Completo:</strong> a resposta cobre o que a pergunta pediu, incluindo exceções que mudam a decisão do cliente?</li>
+      <li><strong>Política:</strong> a resposta evita o que é proibido, como prometer aprovação de sinistro ou dar orientação jurídica?</li>
+    </ul>
+    <p>Factual e política são critérios de <strong>bloqueio</strong>: falhou, o caso falha, não importa o resto. Completude e tom entram como nota de acompanhamento. No exemplo da abertura, a resposta teria levado 5 em tom e 1 em factual, e o caso teria falhado.</p>
+
+    <h3>Evidência antes da nota</h3>
+    <p>Peço que o juiz primeiro cite o trecho da resposta e o trecho da referência que sustentam a avaliação, depois explique em uma frase e só no fim dê a nota. Quando a nota vem primeiro, a justificativa vira racionalização. Quando a evidência vem primeiro, a nota tende a seguir o que foi citado. E quem revisa um caso discordante lê a citação em 10 segundos em vez de reler tudo.</p>
+    <p>Um trecho da rubrica de factual, como uso:</p>
+    <pre><code>criterio: factual
+pergunta: Os fatos da RESPOSTA batem com a REFERENCIA?
+passos:
+  1. Copie cada afirmação de prazo, valor ou condição da RESPOSTA.
+  2. Para cada uma, copie o trecho da REFERENCIA que confirma ou contradiz.
+  3. Só então decida.
+notas:
+  0: pelo menos uma afirmação contradiz a REFERENCIA.
+  1: nenhuma contradição; alguma afirmação não aparece na REFERENCIA.
+  2: todas as afirmações confirmadas por trecho citado.
+saida (JSON): {"evidencias": [...], "motivo": "...", "nota": 0|1|2}</code></pre>
+    <p>O harness valida o JSON com schema antes de usar a nota. Texto solto, nota fora da escala ou nota sem evidência viram erro do juiz, não aprovação. Já vi parser que tratava "não consegui avaliar" como nota 5.</p>
+
+    <h2>Estabilidade: o mesmo juiz, duas notas</h2>
+
+    <h3>Variância de uma rodada para outra</h3>
+    <p>Rode o mesmo juiz, com o mesmo prompt, nas mesmas 200 respostas, três vezes. Mesmo com temperatura 0, que é o parâmetro que reduz a aleatoriedade da geração, muitos provedores não garantem saída idêntica entre chamadas. Conte em quantos casos o veredito binário mudou em pelo menos uma das três rodadas. Num exemplo ilustrativo, 14 de 200, ou 7%.</p>
+    <p>Esse é o ruído de piso do instrumento. Se uma mudança no gerador moveu a aprovação em 2 pontos e o juiz sozinho oscila mais do que isso, você está medindo o juiz. Publico a instabilidade junto com o kappa. Nos critérios de bloqueio, rodo o juiz três vezes e uso maioria; caso em que as três rodadas discordam vai para revisão humana. O ruído vira sinal de "este caso é difícil".</p>
+
+    <h3>Drift quando o juiz muda de versão</h3>
+    <p><strong>Drift do juiz</strong> é a mudança no comportamento do instrumento sem que nada mude no sistema avaliado: o provedor atualiza o modelo por trás de um nome genérico, alguém ajusta o prompt do juiz "só para melhorar o formato", a biblioteca de eval troca o template padrão. O sintoma clássico é a nota média subir 0,3 numa semana em que ninguém mexeu no assistente.</p>
+    <ul>
+      <li><strong>Fixar a versão:</strong> o juiz é chamado pelo identificador de versão específica, nunca pelo alias "mais recente".</li>
+      <li><strong>Versionar prompt e rubrica do juiz</strong> no repositório do golden set, com hash registrado em cada resultado.</li>
+      <li><strong>Recalibrar em toda troca:</strong> mudou modelo, prompt ou rubrica do juiz, roda o conjunto de calibração, recalcula kappa, recall e instabilidade, e registra nova baseline. Sem isso, você compara duas balanças diferentes.</li>
+      <li><strong>Canário semanal:</strong> 30 casos de calibração rodam toda semana mesmo sem troca. Se a concordância com o humano cair, algo mudou embaixo de você.</li>
+    </ul>
+
+    <h2>Gate: juiz na triagem, gente na faixa de dúvida</h2>
+    <p>Com o juiz medido, o desenho do gate fica mais honesto. Não uso o juiz como decisor único. Uso como triagem.</p>
+
+    <h3>Três saídas, não duas</h3>
+    <ul>
+      <li><strong>Aprovado com folga:</strong> nota máxima nos critérios de bloqueio, nas três rodadas, com evidência citada. Passa sem revisão.</li>
+      <li><strong>Reprovado com clareza:</strong> nota 0 em factual ou política, de forma consistente. Falha o caso, e o PR mostra a evidência que o juiz citou.</li>
+      <li><strong>Faixa de dúvida:</strong> rodadas que discordam, nota intermediária num critério de bloqueio, ou evidência ausente. Vai para uma fila de revisão humana.</li>
+    </ul>
+    <p>Num golden set de 200 casos, essa faixa costuma ficar entre 10 e 20 casos. Com a evidência já citada, uma pessoa revisa em 20 a 30 minutos. E cada decisão humana volta para o conjunto de calibração, que cresce justamente nos casos difíceis.</p>
+
+    <h3>Limiar com intervalo, não com número solto</h3>
+    <p>"A taxa de aprovação caiu de 85% para 82%, bloqueia o merge" parece rigoroso. Com 200 casos, não é. A taxa de aprovação é uma proporção, e proporção medida em amostra tem margem de erro. A conta de bolso é o <strong>erro padrão binomial</strong>:</p>
+    <pre><code>erro_padrao = raiz( p × (1 - p) / n )
+
+p = 0,85   n = 200
+erro_padrao = raiz( 0,85 × 0,15 / 200 )
+            = raiz( 0,000638 )
+            = 0,025   (2,5 pontos percentuais)</code></pre>
+    <p>Um intervalo de cerca de 95% é a taxa mais ou menos 2 erros padrão: 85% ± 5 pontos, de 80% a 90%. Uma queda de 3 pontos cabe com folga dentro do ruído. Se o gate bloqueia por isso, ele vai bloquear PRs inocentes e o time vai aprender a pedir exceção.</p>
+    <p>Quanto caso seria preciso para enxergar uma diferença de 2 pontos com essa confiança? Invertendo a conta, precisaria de um erro padrão de 1 ponto: n = 0,85 × 0,15 / 0,01² = 1.275 casos. Raramente alguém tem isso rotulado. Por isso eu faço três coisas no lugar de apertar o limiar:</p>
+    <ul>
+      <li><strong>Comparar casos pareados:</strong> as duas versões rodam nas mesmas 200 perguntas. Em vez de comparar duas médias, conto quantos casos passaram de aprovado para reprovado e o contrário. Se 9 casos pioraram e 2 melhoraram, o sinal é bem mais claro do que a diferença das médias sugere, e cada um dos 9 tem nome e evidência.</li>
+      <li><strong>Gate absoluto para o crítico:</strong> qualquer caso de política ou factual que era aprovado e passou a reprovado bloqueia, independentemente da média. Média é para tendência. Falha crítica é contada um por um.</li>
+      <li><strong>Limiar declarado com a margem:</strong> o relatório mostra "82% (intervalo 77% a 87%, n=200)", não só "82%". Quem lê entende sozinho por que três pontos não são notícia.</li>
+    </ul>
+    <p>Para a taxa de falha crítica, com p = 2% e n = 200, o erro padrão é raiz(0,02 × 0,98 / 200), cerca de 1 ponto: a taxa real pode estar entre perto de 0% e 4%. Em domínio regulado, isso pede mais casos críticos no golden set, não gate mais frouxo.</p>
+
+    <h2>Quando não usar juiz nenhum</h2>
+    <p>A pergunta que faço antes de colocar um juiz num critério é: existe um oráculo mais barato e determinístico para isso? Quase sempre existe para uma parte do problema.</p>
+    <ul>
+      <li><strong>Formato:</strong> a resposta precisa ser JSON com <code>prazo_dias</code> e <code>clausula</code>. JSON Schema, custo de milissegundos.</li>
+      <li><strong>Padrão textual:</strong> protocolo no formato certo, nenhum CPF na saída, nenhuma frase proibida como "garantimos aprovação". Regex.</li>
+      <li><strong>Correspondência exata:</strong> classificação de intenção, extração de campo, opções fechadas. Comparação com o esperado, como qualquer unitário.</li>
+      <li><strong>Execução:</strong> se o sistema gera código ou SQL, rode a saída contra testes ou um banco de fixture. Execução é oráculo melhor do que opinião sobre código.</li>
+      <li><strong>Citação:</strong> o identificador do trecho citado existe e estava no contexto recuperado.</li>
+      <li><strong>Fato estruturado:</strong> extrair o número de dias da resposta e comparar com 7 é mais confiável do que pedir ao juiz que opine. O juiz pode fazer a extração; a comparação é código.</li>
+    </ul>
+    <p>A regra: <strong>o oráculo mais barato que seja confiável</strong>. Determinístico primeiro, juiz com referência depois, juiz sem referência só para o que sobra, normalmente tom, clareza e completude. No assistente de seguros, o juiz ficou com 3 dos 9 critérios originais. Os outros 6 viraram asserts que nunca mais oscilaram.</p>
+
+    <h2>Anti-padrões</h2>
+    <ul>
+      <li><strong>Juiz corrigindo a si mesmo:</strong> o mesmo modelo, às vezes com o mesmo prompt de sistema, gera a resposta e a avalia. É a autopreferência no grau máximo, e ainda compartilha os mesmos pontos cegos de conhecimento.</li>
+      <li><strong>Prompt do juiz fora do controle de versão:</strong> o prompt mora numa variável de ambiente ou num painel de ferramenta e muda sem PR. Seis meses depois, ninguém sabe qual juiz produziu a baseline.</li>
+      <li><strong>Média escondendo falha crítica:</strong> nota média 4,6 com 3 respostas que prometem reembolso indevido. Média de qualidade não pode compensar violação de política.</li>
+      <li><strong>Nenhum conjunto de calibração:</strong> o juiz foi escolhido porque "parece razoável" em cinco exemplos no notebook. Sem kappa, sem recall, sem como saber se piorou.</li>
+      <li><strong>Calibração só com respostas boas:</strong> dá concordância alta para qualquer juiz, inclusive o que aprova tudo.</li>
+      <li><strong>Otimizar o gerador contra o juiz:</strong> o time ajusta o prompt do assistente até a nota subir, sem olhar rótulo humano. Com viés de verbosidade, o atalho é alongar as respostas. A nota sobe, o cliente lê mais e entende menos.</li>
+      <li><strong>Falha do juiz tratada como aprovação:</strong> timeout, JSON inválido ou recusa caindo num valor padrão. Erro do instrumento tem que aparecer como erro.</li>
+    </ul>
+
+    <h2>Antes de deixar o juiz barrar um merge</h2>
+    <ol>
+      <li><strong>Separe os critérios por oráculo.</strong> Liste o que o golden set verifica hoje e marque o que dá para virar schema, regex, correspondência exata ou execução. Tire esses critérios do juiz nesta semana.</li>
+      <li><strong>Rotule 100 casos com duas pessoas.</strong> Mistura de fáceis, difíceis e sabidamente ruins, pelo menos 20% de casos ruins. Calcule o kappa entre as duas antes de olhar o juiz. Se ficar abaixo de 0,6, reescreva a rubrica primeiro.</li>
+      <li><strong>Reescreva a rubrica com âncoras e evidência primeiro.</strong> Critérios separados, escala de 2 ou 3 níveis, factual e política como bloqueio, saída em JSON validada por schema.</li>
+      <li><strong>Meça o juiz contra o rótulo.</strong> Kappa, recall e precisão para "ruim", e instabilidade em três rodadas. Escreva os quatro números no README do eval, junto com a versão fixada do modelo e o hash do prompt.</li>
+      <li><strong>Rode os três testes de viés.</strong> Troca de ordem em 100 pares, enchimento em 50 respostas, comparação por família em 60 perguntas. Uma tarde de trabalho. Aplique a mitigação de cada viés que aparecer.</li>
+      <li><strong>Mude o gate para três saídas.</strong> Aprovado, reprovado e faixa de dúvida com fila humana. Bloqueio absoluto para qualquer regressão em caso crítico, e intervalo de confiança impresso ao lado de toda taxa.</li>
+      <li><strong>Agende o canário e a recalibração.</strong> 30 casos de calibração toda semana, recalibração completa a cada troca de modelo, prompt ou rubrica do juiz. Nomeie quem olha o resultado.</li>
+    </ol>
+
+    <p>A nota do juiz vale exatamente o que vale a comparação dele com uma pessoa que conhece o domínio. Sem essa comparação, o 4,6 no painel é só uma opinião bem formatada, e o gate que confia nela aprova a resposta dos 30 dias com a mesma tranquilidade com que aprovaria a certa.</p>
+
+    <div class="article__foot">
+      <a href="../index.html#artigos">← Voltar aos artigos</a>
+    </div>
+  </article>
+</body>
+</html>

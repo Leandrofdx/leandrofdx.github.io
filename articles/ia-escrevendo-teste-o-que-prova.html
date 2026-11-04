@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>IA escrevendo teste: como saber se o teste gerado prova alguma coisa — Leandro Lima</title>
+  <meta name="description" content="Testes gerados por IA com visão de risco: oráculo e problema do oráculo, por que cobertura mede execução e não verificação, mutation testing com conta na mão, onde a IA ajuda e onde atrapalha, fluxo spec-first, rubrica de revisão, self-healing de seletor, métricas de adoção e gates no pipeline." />
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="article.css" />
+  <link rel="stylesheet" href="../covers.css?v=12" />
+</head>
+<body>
+  <header class="top">
+    <a class="top__brand" href="../index.html">Leandro Lima</a>
+    <a href="../index.html#artigos">← Artigos</a>
+  </header>
+  <article class="article">
+    <div class="cover cover--mirror" aria-hidden="true">
+      <span class="cover__n">18</span>
+      <span class="cover__a"></span>
+      <span class="cover__b"></span>
+      <span class="cover__c"></span>
+    </div>
+    <span class="article__tag">AI QA</span>
+    <h1>IA escrevendo teste: como saber se o teste gerado prova alguma coisa</h1>
+    <p class="article__meta">Leitura ~20 min · Quality Engineering</p>
+
+    <p>O PR tinha um título modesto, "chore: aumenta cobertura do módulo de pedidos", e uma descrição orgulhosa: "+340 testes gerados com assistente de IA em dois dias. Cobertura de linha de 61% para 89%. Pipeline verde." Teve três aprovações em menos de uma hora. Ninguém leu os 340 testes. Ninguém leria.</p>
+    <p>Onze dias depois, o financeiro perguntou por que a campanha "10% de desconto em pedidos a partir de R$ 200" estava gerando reclamação. Quem comprava exatamente R$ 200,00 não recebia desconto. A função comparava com <code>&gt;</code> em vez de <code>&gt;=</code>. O bug estava no código havia quatro meses. E, desde aquele PR, estava também nos testes: um dos 340 afirmava, com todas as letras, que um pedido de R$ 200,00 tinha desconto zero. O teste não deixou de pegar o bug. Ele protegeu o bug. Quando alguém tentou corrigir a comparação, o teste ficou vermelho, e a primeira reação foi achar que a correção estava errada.</p>
+    <p>Esse é o padrão que mais vejo quando um time adota IA para escrever teste. Não é o teste que não compila, nem o que chama uma API inexistente. Esses aparecem logo. É o teste que lê o código, descreve o que o código faz e chama isso de verificação.</p>
+
+    <div class="callout">
+      <p>Um teste que só repete o que o código faz não verifica nada: ele fotografa o comportamento atual, com bug e tudo, e cobra caro para manter a foto.</p>
+    </div>
+
+    <h2>Três palavras antes de qualquer ferramenta</h2>
+    <p>A discussão sobre teste gerado por IA costuma travar porque as pessoas usam "teste", "cobertura" e "verificação" como se fossem a mesma coisa. Não são. Fixo três termos.</p>
+
+    <h3>Oráculo de teste</h3>
+    <p>Pergunta: quando o teste roda e compara um resultado com um valor esperado, de onde veio esse valor esperado? A fonte desse valor tem nome: <strong>oráculo de teste</strong>. É o mecanismo que decide se o comportamento observado está certo ou errado. Pode ser uma regra de negócio escrita ("a partir de R$ 200, 10% de desconto"), um cálculo feito à mão, uma versão anterior confiável do sistema, uma propriedade matemática ("ordenar duas vezes dá o mesmo resultado que ordenar uma vez") ou uma pessoa especialista.</p>
+    <p>No exemplo, a regra dizia: pedido de 20.000 centavos recebe 2.000 de desconto. Esse é o oráculo. O teste gerado usou outro: rodou mentalmente o código e anotou o que saía. Deu 0. O valor esperado veio da implementação, que é exatamente a coisa sob suspeita.</p>
+
+    <h3>Problema do oráculo</h3>
+    <p>Em muitos sistemas, saber o resultado correto é difícil. Qual é o frete certo para um CEP com três transportadoras e promoção regional? A literatura chama isso de <strong>problema do oráculo</strong>: gerar entradas é fácil, decidir se a saída está certa é caro. O levantamento clássico é "The Oracle Problem in Software Testing: A Survey", de Barr e coautores (IEEE Transactions on Software Engineering, 2015).</p>
+    <p>A IA resolve muito bem a parte fácil, gerar entradas e estrutura de teste. A parte difícil ela só resolve se você der a fonte da verdade. Se você der só o código-fonte, a única fonte disponível é o próprio código. O modelo não está sendo preguiçoso. Está usando o único oráculo que recebeu.</p>
+
+    <h3>Cobertura de linha e de ramo</h3>
+    <p><strong>Cobertura de linha</strong> é a porcentagem de linhas do código que foram executadas pelo menos uma vez durante a suíte. <strong>Cobertura de ramo</strong> (branch coverage) é a porcentagem de caminhos de decisão exercitados: num <code>if</code>, o lado verdadeiro e o lado falso contam separado. Ramo é mais exigente que linha, porque um <code>if</code> sem <code>else</code> pode ter 100% de linha com só o lado verdadeiro exercitado.</p>
+    <p>As duas medem a mesma coisa: <strong>execução</strong>. Nenhuma das duas mede se algum valor foi conferido. Um teste que chama <code>desconto(30000)</code> e não faz nenhuma asserção cobre a linha do <code>if</code>, cobre o ramo verdadeiro, e não prova nada. Cobertura responde "esse código rodou durante os testes?". A pergunta que importa é outra: "se esse código estiver errado, algum teste falha?". É por isso que um PR pode levar a cobertura de 61% para 89% sem adicionar um grama de verificação.</p>
+
+    <h2>Por que isso é risco, e não só desperdício</h2>
+    <p>Uso a mesma conta de risco em tudo: <strong>impacto × probabilidade × detectabilidade</strong>, de 1 a 5 cada. Detectabilidade alta quer dizer que a falha aparece tarde. Aplico a conta ao cenário "a suíte gerada está protegendo comportamento errado".</p>
+    <ul>
+      <li><strong>Impacto (I):</strong> depende do módulo. Em pedidos, preço e desconto, um bug congelado é dinheiro. Nota 4.</li>
+      <li><strong>Probabilidade (P):</strong> se o modelo recebe só o código e a instrução "escreva testes para este arquivo", a chance de algum valor esperado ter vindo da implementação é quase certa. Nota 4.</li>
+      <li><strong>Detectabilidade (D):</strong> aqui está o ponto. Antes, a área sem teste aparecia vermelha no relatório e alguém ficava desconfortável. Depois do PR, a mesma área aparece verde e grande. O sinal de alerta sumiu. Nota 5.</li>
+    </ul>
+    <p>Resultado: 4 × 4 × 5 = <strong>80</strong>, mais alto que a mesma área sem teste nenhum (4 × 4 × 3 = 48). Suíte vazia é risco conhecido; suíte cheia e oca é risco escondido.</p>
+    <p>Três efeitos concretos:</p>
+    <ol>
+      <li><strong>Falsa confiança.</strong> O time deixa de explorar pedidos porque "está coberto", e o release é aprovado porque o painel mostra 89%.</li>
+      <li><strong>Snapshot do bug.</strong> O teste trava o comportamento atual. Quando alguém corrige o bug, o teste falha e a correção parece regressão. No caso da abertura, quem corrigiu o <code>&gt;</code> passou uma hora desconfiando do próprio código.</li>
+      <li><strong>Manutenção sem retorno.</strong> Teste acoplado à implementação quebra em toda refatoração. O time aprende a atualizar o valor esperado sem pensar, e aí nem o teste bom é levado a sério.</li>
+    </ol>
+
+    <h2>O exemplo em código</h2>
+    <p>A função com o bug e o teste que um assistente gerou quando recebeu só o arquivo:</p>
+<pre><code>// desconto.js
+export function desconto(totalCentavos) {
+  if (totalCentavos &gt; 20000) return Math.round(totalCentavos * 0.1);
+  return 0;
+}
+
+// desconto.test.js (gerado a partir do código)
+test('calcula desconto', () =&gt; {
+  expect(desconto(10000)).toBe(0);
+  expect(desconto(20000)).toBe(0);    // o bug, afirmado como verdade
+  expect(desconto(30000)).toBe(3000);
+});</code></pre>
+    <p>O teste roda, passa, dá 100% de linha e 100% de ramo na função. E afirma o bug. Agora a versão escrita a partir da regra, com o oráculo explícito:</p>
+<pre><code>// Regra CMP-112: pedidos a partir de R$ 200,00 têm 10% de desconto.
+test.each([
+  [19999, 0],     // 1 centavo abaixo do limite: sem desconto
+  [20000, 2000],  // exatamente no limite: "a partir de" inclui
+  [30000, 3000],
+])('pedido de %i centavos recebe %i de desconto', (total, esperado) =&gt; {
+  expect(desconto(total)).toBe(esperado);
+});</code></pre>
+    <p>Essa versão falha na primeira execução. Ótimo: é o trabalho dela. A diferença entre as duas não é estilo. É de onde veio o número <code>2000</code>. Na primeira, veio do código. Na segunda, veio da regra, com o identificador da regra no comentário, e o caso de fronteira está nomeado como fronteira.</p>
+
+    <h2>Mutation testing: o teste dos testes</h2>
+    <p>Pergunta: como eu sei, sem ler 340 testes, se eles pegam bug? Resposta prática: eu coloco bugs no código de propósito e vejo se algum teste reclama. Isso tem nome.</p>
+    <p><strong>Mutation testing</strong> é uma técnica que gera versões levemente alteradas do código e roda a suíte contra cada uma. Cada versão alterada é um <strong>mutante</strong>. Exemplos de alteração: trocar <code>&gt;</code> por <code>&gt;=</code>, trocar <code>+</code> por <code>-</code>, trocar <code>0.1</code> por <code>0</code>, apagar uma chamada de função, inverter um booleano, trocar um <code>return x</code> por <code>return 0</code>.</p>
+    <ul>
+      <li><strong>Mutante morto (killed):</strong> pelo menos um teste falhou com a alteração. A suíte percebeu o bug plantado.</li>
+      <li><strong>Mutante sobrevivente (survived):</strong> todos os testes passaram mesmo com o código alterado. Existe um bug possível que a suíte não enxerga.</li>
+      <li><strong>Mutante equivalente:</strong> a alteração não muda o comportamento observável. Exemplo: trocar <code>i &lt; 10</code> por <code>i != 10</code> num laço que só incrementa de 1 em 1 a partir de 0. Nenhum teste pode matá-lo, então ele sai da conta.</li>
+      <li><strong>Mutation score:</strong> mortos divididos por (total menos equivalentes).</li>
+    </ul>
+
+    <h3>A conta na mão</h3>
+    <p>Um módulo gera 120 mutantes. A suíte mata 78. Na revisão, 12 dos sobreviventes são equivalentes. O score é 78 ÷ (120 − 12) = 78 ÷ 108 ≈ <strong>72%</strong>. Os 30 sobreviventes restantes são uma lista concreta: 30 alterações de código que passariam pelo CI sem ninguém perceber. Cada um aponta uma linha e uma mudança específica. É a melhor lista de tarefas de teste que conheço.</p>
+    <p>Agora o contraste que costuma mudar a conversa com a liderança. No módulo de pedidos do exemplo, depois do PR de 340 testes:</p>
+    <ul>
+      <li>Cobertura de linha: <strong>92%</strong>.</li>
+      <li>Mutation score: <strong>41%</strong>.</li>
+    </ul>
+    <p>Lendo junto: 92% do código roda durante os testes, mas de cada dez bugs plantados, seis passam. Os números são ilustrativos; a distância entre eles é típica de suíte escrita olhando a implementação, cheia de testes que conferem só que "não lançou exceção".</p>
+
+    <h3>O mutante que conserta o bug</h3>
+    <p>Volte à função de desconto. Um dos mutantes que a ferramenta gera é trocar <code>&gt;</code> por <code>&gt;=</code>. Esse mutante é, por acaso, o código correto. O teste gerado mata esse mutante, porque afirma <code>desconto(20000) == 0</code>. Na tela, aparece como vitória: mutante morto. Na prática, a suíte está matando a correção.</p>
+    <p>Por isso eu não trato mutation score como nota a maximizar. Trato como uma lista para ler. Um mutante morto num caso de fronteira merece a pergunta: o teste que o matou estava afirmando a regra ou a implementação? Score alto com oráculo errado continua errado.</p>
+
+    <h3>Ferramentas e custo</h3>
+    <p>Exemplos de ferramentas maduras: <strong>Stryker</strong> para JavaScript, TypeScript e .NET (Stryker.NET); <strong>PIT</strong>, também chamado Pitest, para Java; <strong>mutmut</strong> para Python. Todas geram relatório por arquivo, com os mutantes sobreviventes listados linha a linha.</p>
+    <p>O custo é real. Cada mutante exige rodar pelo menos parte da suíte. Num módulo com 2.000 mutantes, mesmo com as otimizações das ferramentas, dá horas. Por isso eu rodo mutation testing <strong>só sobre as linhas alteradas no PR</strong>, pelo modo incremental da ferramenta ou filtrando pelo diff. Num PR com 80 linhas alteradas, sai algo entre 30 e 60 mutantes e poucos minutos de CI. O repositório completo roda uma vez por semana, fora do caminho do merge, para gerar tendência.</p>
+
+    <h2>Onde a IA ajuda de verdade</h2>
+    <p>Não sou contra teste gerado. Uso todo dia. Mas uso nos lugares onde o oráculo não depende do modelo adivinhar a regra, ou onde eu forneço a regra.</p>
+    <ul>
+      <li><strong>Boilerplate:</strong> setup de framework, mock de HTTP, estrutura de <code>describe</code> e <code>beforeEach</code>, fixtures. Texto repetitivo, pouca decisão, nenhum risco de oráculo.</li>
+      <li><strong>Builders de dado de teste:</strong> uma função <code>umPedido().comItens(3).comCupom('X')</code> que monta objetos válidos com valores padrão. Eu reviso os padrões, porque é ali que dado irreal entra.</li>
+      <li><strong>Brainstorm de casos de borda a partir da especificação:</strong> dou o critério de aceite e peço "liste entradas que podem quebrar isso". O modelo lembra de vazio, nulo, fuso, arredondamento, Unicode, negativos. Eu escolho quais entram.</li>
+      <li><strong>Candidatos a teste baseado em propriedade.</strong> Explico o termo abaixo.</li>
+      <li><strong>Converter casos manuais em esqueleto automatizado:</strong> 60 casos de planilha viram 60 funções com nome, passos e um <code>TODO</code> no lugar do valor esperado, que vem da planilha, não do código.</li>
+      <li><strong>Explicar código legado:</strong> peço um resumo do que cada função parece fazer. Uso como mapa, não como verdade. Onde o resumo diz "parece que", vou perguntar a quem conhece a regra.</li>
+    </ul>
+
+    <h3>Teste baseado em propriedade, rápido</h3>
+    <p>Pergunta: e quando escrever o valor esperado de cada caso é caro? Em vez de afirmar "para esta entrada, esta saída", você afirma uma regra que vale para qualquer entrada, e a ferramenta gera centenas de entradas aleatórias tentando quebrá-la. Isso é <strong>teste baseado em propriedade</strong> (property-based testing). Quando encontra uma entrada que viola a regra, a ferramenta reduz essa entrada até o menor exemplo que ainda falha, o que facilita muito o diagnóstico.</p>
+    <p>Exemplos de ferramenta: <strong>Hypothesis</strong> em Python e <strong>fast-check</strong> em JavaScript e TypeScript. Exemplos de propriedade:</p>
+    <ul>
+      <li><strong>Ida e volta (roundtrip):</strong> para qualquer objeto <code>x</code>, <code>decode(encode(x))</code> é igual a <code>x</code>. Vale para serialização JSON, codificação de URL, conversão de moeda entre centavos e texto.</li>
+      <li><strong>Idempotência:</strong> ordenar uma lista já ordenada não muda nada. <code>sort(sort(x))</code> é igual a <code>sort(x)</code>.</li>
+      <li><strong>Invariante de negócio:</strong> o desconto nunca é negativo e nunca passa do total. Para qualquer total entre 0 e 10 milhões de centavos.</li>
+    </ul>
+    <p>A propriedade é um oráculo que não depende da implementação. Pedir ao modelo "sugira propriedades que esta função deveria respeitar" é um bom uso: as sugestões são fáceis de julgar.</p>
+
+    <h2>Onde a IA atrapalha</h2>
+    <p>Os problemas abaixo aparecem com frequência em teste gerado. Nenhum é exclusivo da IA. A diferença é a escala: um humano escreve 5 testes ruins por dia, um assistente escreve 50.</p>
+    <ul>
+      <li><strong>APIs inventadas:</strong> o teste chama <code>expect(x).toBeValidOrder()</code>, um matcher que não existe, ou um método do SDK que existia duas versões atrás. Esse erro é barato porque falha alto.</li>
+      <li><strong>Mock da própria unidade sob teste:</strong> o teste de <code>calcularFrete</code> mocka <code>calcularFrete</code> e confere que o mock devolveu o que foi programado. Parece absurdo, mas aparece.</li>
+      <li><strong>Excesso de mock:</strong> tudo mockado, inclusive funções puras. O teste verifica a ordem das chamadas internas, não o resultado.</li>
+      <li><strong>Teste sem asserção:</strong> chama a função e termina, ou afirma só <code>toBeDefined()</code>. Conta para cobertura, não mata nenhum mutante.</li>
+      <li><strong>Acoplamento a detalhe de implementação:</strong> confere que um método privado foi chamado duas vezes ou que o SQL gerado tem uma string exata.</li>
+      <li><strong>Espera fixa em teste de UI:</strong> <code>sleep(3000)</code> antes de clicar. Passa na máquina rápida, falha no CI carregado. É a receita do flake, que detalho em <a href="automacao-web-que-escala-com-o-produto.html">Automação web que não vira dívida</a>.</li>
+      <li><strong>Seletor frágil:</strong> <code>div:nth-child(3) &gt; span.btn-primary</code>, copiado do DOM atual. O mesmo artigo trata de contrato de seletor com o time de front.</li>
+      <li><strong>Cenário duplicado:</strong> oito testes que exercitam o mesmo caminho com dados levemente diferentes. Infla a contagem, não a verificação.</li>
+    </ul>
+
+    <h2>Fluxo spec-first: o oráculo entra antes do código</h2>
+    <p>A correção estrutural é mudar o que o modelo recebe e a ordem em que as coisas acontecem. Uso quatro passos.</p>
+    <ol>
+      <li><strong>Entrada é a regra, não só o código.</strong> O prompt leva o critério de aceite, a história, o trecho de documentação ou a tabela de regra. O código-fonte pode ir junto como contexto de assinatura, mas com instrução explícita: "os valores esperados devem vir da especificação; se a especificação não define um caso, marque como dúvida em vez de deduzir do código".</li>
+      <li><strong>Plano antes de código.</strong> Primeiro peço só o plano de teste: uma lista de casos, cada um com entrada, resultado esperado e de onde veio o resultado esperado (qual frase da regra). Nada de código ainda. São 15 linhas que leio em três minutos.</li>
+      <li><strong>Revisão humana do plano.</strong> É aqui que o bug da abertura teria sido pego. No plano, aparece "pedido de R$ 200,00: desconto 0, fonte: código". A coluna de fonte entrega o problema. Ou aparece "desconto 20,00, fonte: 'a partir de R$ 200'", e o teste vai falhar contra o código atual, revelando o bug antes do merge.</li>
+      <li><strong>Cada teste diz o comportamento e a falha que pega.</strong> O nome do teste descreve o comportamento ("pedido no limite exato recebe desconto"). Um comentário curto ou o próprio nome diz que tipo de defeito ele pega ("pega comparação estrita no limite"). Se ninguém consegue escrever qual falha o teste pegaria, o teste provavelmente não pega nenhuma.</li>
+    </ol>
+    <p>É mais lento que "gere testes para este arquivo": uns 20 minutos de plano e revisão para o módulo de desconto. Os 340 testes do PR original custaram dois dias de geração e quatro de limpeza.</p>
+
+    <h2>Rubrica de revisão para teste gerado</h2>
+    <p>Na revisão de PR, não leio todos os testes gerados com a mesma atenção. Pego uma amostra e passo por seis perguntas. Se a amostra reprova em duas ou mais, o PR volta inteiro.</p>
+    <ol>
+      <li><strong>Tem oráculo real?</strong> O valor esperado veio de regra, cálculo independente ou propriedade? "É o que o código devolve" reprova.</li>
+      <li><strong>Falha quando o comportamento quebra?</strong> Provo: mudo uma linha do código de produção à mão, ou reverto o commit da funcionalidade, e rodo. Tem que ficar vermelho.</li>
+      <li><strong>É independente de detalhes internos?</strong> Refatorei sem mudar comportamento e o teste quebrou? Reprova.</li>
+      <li><strong>É determinístico?</strong> Sem relógio real, ordem de execução, dado compartilhado ou espera fixa. Rodo dez vezes; uma falha reprova.</li>
+      <li><strong>O nome se lê como comportamento?</strong> "test_desconto_3" reprova. "pedido abaixo do limite não recebe desconto" passa.</li>
+      <li><strong>Os mocks são necessários?</strong> Mock substitui algo lento, caro ou não determinístico. Mock de função pura ou da própria unidade reprova.</li>
+    </ol>
+
+    <h2>Self-healing de seletor em automação de UI</h2>
+    <p>Pergunta: e quando a IA não escreve o teste, mas conserta o teste sozinha durante a execução? Várias ferramentas de automação de UI oferecem isso. O nome é <strong>self-healing locator</strong>, seletor que se autocorrige.</p>
+    <p>Como funciona, em termos gerais: o teste procura o botão pelo seletor <code>[data-testid="checkout-submit"]</code> e não encontra. Em vez de falhar, a ferramenta compara a página com o que guardou do elemento em execuções anteriores (texto, posição, atributos, vizinhos), escolhe o mais parecido, clica e segue. Algumas atualizam o seletor sozinhas para a próxima execução.</p>
+    <p>O ganho: menos teste quebrado por mudança cosmética. O risco é mais grave. <strong>Se a ferramenta cura para o elemento errado, ela esconde uma regressão.</strong> Exemplo: o botão "Finalizar compra" sumiu por um bug de renderização condicional. A ferramenta encontra "Finalizar e salvar carrinho", com texto e posição próximos, e clica. O teste segue. O usuário real não tem o botão, e o teste estava ali exatamente para pegar isso.</p>
+    <p>Minhas regras quando um time quer usar self-healing:</p>
+    <ul>
+      <li><strong>Toda cura gera log</strong> com seletor original, elemento escolhido, pontuação de similaridade e screenshot.</li>
+      <li><strong>Cura não vira permanente sem aprovação humana.</strong> A atualização do seletor no código passa por PR com alguém olhando o screenshot.</li>
+      <li><strong>Cura em fluxo crítico falha o build.</strong> Em checkout, pagamento e login, prefiro vermelho a cura silenciosa.</li>
+      <li><strong>Taxa de cura medida e com limite.</strong> Se 15% das execuções de uma área precisam de cura, falta contrato de seletor com o front, e a ferramenta está cobrindo uma dívida.</li>
+    </ul>
+
+    <h2>Métricas de adoção que não mentem</h2>
+    <p>O KPI que mais vejo em adoção de IA para teste é "número de testes gerados". Ele premia exatamente o problema deste artigo: quem gera 340 testes ocos sobe no ranking, quem gera 30 bons e apaga 50 ruins cai. Eu uso estas:</p>
+    <ul>
+      <li><strong>Mutation score sobre código alterado:</strong> por PR, só nas linhas mudadas, comparando PRs com teste gerado e com teste escrito à mão. Se o gerado fica 20 pontos abaixo, o fluxo está errado, não o modelo.</li>
+      <li><strong>Defeitos escapados por área:</strong> bugs achados em produção ou homologação, por módulo, antes e depois. Se pedidos ganhou 340 testes e os escapados não mudaram, os testes estão no lugar errado.</li>
+      <li><strong>Taxa de flake de teste gerado versus humano:</strong> execuções com resultado diferente sem mudança de código. Se a do gerado for o dobro, ele precisa de revisão mais dura.</li>
+      <li><strong>Tempo de revisão:</strong> perto de zero, ninguém está lendo. Alto demais, o gerador produz volume demais para o valor.</li>
+      <li><strong>Taxa de testes apagados:</strong> porcentagem dos testes gerados que são removidos em até 90 dias. Teste bom raramente é apagado tão cedo. Se 30% somem, eram ruído desde o início.</li>
+    </ul>
+    <p>Olho as cinco juntas. Uma sozinha engana. Mutation score alto com defeitos escapados subindo, por exemplo, costuma indicar oráculo errado: os testes matam mutantes, mas afirmando a implementação.</p>
+
+    <h2>O teste gerado no pipeline</h2>
+    <p>Teste gerado não ganha atalho. Também não ganha punição. Passa pelos mesmos gates que qualquer teste, mais dois controles leves.</p>
+    <ul>
+      <li><strong>Mesmos gates:</strong> lint, revisão de código, execução determinística repetida, mutation score sobre o diff com limite mínimo (começo em 60% para código novo e ajusto pelo histórico do time), tempo de execução dentro do orçamento da camada.</li>
+      <li><strong>Proveniência rotulada:</strong> o PR leva um rótulo como <code>tests:ai-assisted</code>, e o commit leva um trailer padronizado. Não é para julgar quem usou IA. É para conseguir calcular as métricas acima separando gerado de humano. Sem rótulo, não há comparação, só opinião.</li>
+      <li><strong>Auditoria por amostra:</strong> a cada quinzena, sorteio dez testes gerados já no repositório, passo a rubrica e registro aprovado ou reprovado, e por qual critério. Em três meses dá para ver se o fluxo melhora ou se o time voltou ao "gere testes para este arquivo".</li>
+    </ul>
+    <p>O limite de mutation score vale para o diff, não para o repositório. Exigir 70% no repositório inteiro trava todo mundo e incentiva o teste oco.</p>
+
+    <h2>Anti-padrões</h2>
+    <ul>
+      <li>Usar cobertura de linha como meta de adoção de IA e comemorar o salto no painel.</li>
+      <li>Pedir "escreva testes para este arquivo" sem especificação, e aceitar o resultado porque está verde.</li>
+      <li>Atualizar o valor esperado do teste quando ele quebra, sem perguntar se quem está errado é o código.</li>
+      <li>Rodar mutation testing no repositório inteiro em todo PR, descobrir que leva três horas e desligar.</li>
+      <li>Tratar mutation score como nota a maximizar, sem ler quais mutantes foram mortos e por qual asserção.</li>
+      <li>Self-healing ligado em checkout sem log nem aprovação.</li>
+      <li>Gerar teste de UI para algo que um unitário pegaria, só porque gerar ficou barato. Gerar ficou barato. Manter e rodar não.</li>
+    </ul>
+
+    <h2>Seis passos para o próximo PR com teste gerado</h2>
+    <p>Não precisa de programa de adoção. Precisa de um módulo, uma semana e números antes e depois.</p>
+    <ol>
+      <li><strong>Escolha um módulo com dinheiro ou regra explícita</strong> (preço, desconto, frete, elegibilidade) e meça hoje: cobertura de linha, mutation score do módulo e defeitos escapados nos últimos seis meses. Essa é a linha de base.</li>
+      <li><strong>Ligue mutation testing incremental no CI</strong> com Stryker, PIT ou mutmut, só sobre as linhas alteradas, sem bloquear o merge na primeira semana. Publique o relatório de sobreviventes no comentário do PR.</li>
+      <li><strong>Troque o prompt.</strong> Escreva um modelo de pedido ao assistente que exige a regra como entrada, pede plano de teste com coluna "fonte do valor esperado" e proíbe deduzir valor esperado do código.</li>
+      <li><strong>Revise o plano antes do código</strong> nos próximos três PRs desse módulo. Conte quantas linhas do plano tinham fonte "código". Cada uma é um bug congelado em potencial.</li>
+      <li><strong>Passe a rubrica de seis perguntas</strong> nos testes gerados que já existem no módulo. Apague os reprovados por falta de oráculo ou de asserção. Apagar teste ruim aumenta a confiança na suíte.</li>
+      <li><strong>Rotule a proveniência e revise em 30 dias</strong>: mutation score no diff, flake gerado versus humano, testes apagados e defeitos escapados. Se o score no diff passou de 60% e o flake do gerado está igual ao humano, ligue o gate de mutation e leve o fluxo para o próximo módulo.</li>
+    </ol>
+
+    <p>A IA tornou barato escrever teste. Não tornou barato saber o que é certo. Se a regra de negócio não entra no prompt, o valor esperado vem do código, e um teste montado assim só confirma que o código faz o que já faz.</p>
+
+    <div class="article__foot">
+      <a href="../index.html#artigos">← Voltar aos artigos</a>
+    </div>
+  </article>
+</body>
+</html>
