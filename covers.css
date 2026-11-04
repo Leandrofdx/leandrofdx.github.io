@@ -93,7 +93,8 @@
   bottom: 16%;
   left: 20%;
   width: 70%;
-  background: linear-gradient(180deg, #E6E4EA 0%, #B0AEB6 100%);
+  background: linear-gradient(90deg, #0891b2 0%, #67e8f9 100%);
+  box-shadow: 0 14px 26px rgba(8, 145, 178, 0.28);
   transform: rotate(-2deg);
 }
 
@@ -130,7 +131,9 @@
   bottom: 10%;
   width: 22%;
   height: 8%;
-  background: #1c1c1e;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #0891b2, #67e8f9);
+  box-shadow: 0 8px 20px rgba(8, 145, 178, 0.35);
 }
 
 /* 03 — stacked continuity */
@@ -153,7 +156,8 @@
   left: 18%;
   bottom: 18%;
   width: 68%;
-  background: linear-gradient(180deg, #c4bfb6, #8A8890);
+  background: linear-gradient(180deg, #67e8f9, #0891b2);
+  box-shadow: 0 14px 26px rgba(8, 145, 178, 0.28);
 }
 
 .cover--layers .cover__c {
