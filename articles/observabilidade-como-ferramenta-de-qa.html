@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Quando o teste falha e ninguém sabe por quê — Leandro Lima</title>
-  <meta name="description" content="Observabilidade para QA: correlacionar falha com trace, provar correção com sinal, OpenTelemetry em ambiente de teste e por que screenshot sozinho não basta." />
+  <meta name="description" content="Observabilidade para QA: trace, span, métrica e log correlacionados, OpenTelemetry no ambiente de teste, ritual de falha e2e com trace_id, prova de correção com sinal, sampling, cardinalidade e link no relatório de CI." />
   <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="article.css" />
   <link rel="stylesheet" href="../covers.css?v=11" />
@@ -23,69 +23,203 @@
     </div>
     <span class="article__tag">Observabilidade</span>
     <h1>Quando o teste falha e ninguém sabe por quê</h1>
-    <p class="article__meta">Leitura ~16 min · Quality Engineering</p>
+    <p class="article__meta">Leitura ~18 min · Quality Engineering</p>
 
-    <p>CI vermelho. Step 7: timeout. Screenshot do botão que não clicou. Alguém comenta “flake” e pede rerun. Três reruns depois o job fica verde e o PR sobe. Duas horas depois, produção mostra o mesmo sintoma: pay lento no hop do antifraude. O teste tinha visto a verdade. Faltava o mapa.</p>
-    <p>Observabilidade, para QA, é isso: transformar “passou/falhou” em “o sistema fez X, em Y ms, neste hop”. Sem isso você debugga feeling.</p>
+    <p>Quinta, 16h40. O e2e de checkout fica vermelho no PR que mexe no cálculo de frete. Step 7: <code>Timeout 30000ms exceeded</code> esperando o botão “Pedido confirmado”. O screenshot mostra um spinner. Alguém escreve “flake de novo” e clica em rerun. Vermelho. Rerun. Verde. Merge às 16h58.</p>
+    <p>Às 18h50, já em produção, o p95 do pagamento sobe de 900 ms para 2,4 s. A taxa de abandono no pay vai de 6% para 17% em uma hora e meia. Com ticket médio de R$ 210 e uns 1.800 checkouts iniciados nessa janela, os 11 pontos extras de abandono são cerca de 200 pedidos, algo perto de R$ 42 mil que não entraram. O rollback sai às 20h15.</p>
+    <p>Na post-mortem eu abri o trace de um dos runs vermelhos da tarde. Estava lá, com nome e sobrenome: o span <code>GET /freight/quote</code> passou a chamar o serviço de estoque duas vezes, e a segunda chamada esperava 1,7 s por conexão no pool. O teste tinha visto a verdade às 16h40. Faltava alguém conseguir ler o que ele viu.</p>
+    <p>Esse é o ponto do artigo inteiro: o teste já é um gerador de tráfego controlado, com intenção conhecida e resultado esperado. Se o sistema por baixo dele é mudo, cada falha vira palpite. Se o sistema fala, cada falha vira diagnóstico.</p>
 
     <div class="callout">
-      <p>QA maduro não pergunta só se passou. Pergunta o que o sistema fez, em quanto tempo, e qual evidência prova que a correção pegou.</p>
+      <p>Rerun sem trace é jogar fora a única reprodução barata que você vai ter daquele bug.</p>
     </div>
 
-    <h2>Três sinais e um fio</h2>
-    <p>Antes do jargão: o que você precisa enxergar.</p>
+    <h2>Primeiro, as palavras</h2>
+    <p>Observabilidade tem jargão demais e definição de menos. Antes de usar qualquer termo, o que cada um significa na prática de quem testa.</p>
+
+    <h3>Request e jornada</h3>
+    <p>Uma <strong>request</strong> é uma chamada: o browser pede <code>POST /checkout</code> ao BFF (o backend que serve o front). Uma <strong>jornada</strong> é a sequência de requests que entrega valor ao usuário: busca, carrinho, frete, pagamento, confirmação. Um e2e de checkout dispara umas 15 a 40 requests. Cada uma pode acordar outras 5 a 10 por baixo.</p>
+
+    <h3>Trace e span</h3>
+    <p>Um <strong>trace</strong> é a história completa de uma request, do primeiro hop ao último. Ele é feito de <strong>spans</strong>: cada span é um trecho de trabalho com início, fim, nome e atributos. “BFF recebeu POST /checkout” é um span. “Serviço de pagamento chamou o antifraude” é outro. “Query em <code>inventory</code>” é outro.</p>
+    <p>Spans se organizam em árvore. O primeiro é o <strong>span raiz</strong>; os que ele dispara são <strong>filhos</strong>. Se o raiz durou 2,3 s e um filho durou 1,9 s, você sabe onde olhar sem abrir log nenhum. Todo trace tem um identificador único, o <strong>trace_id</strong>, uma string de 32 caracteres hexadecimais. É esse id que vai costurar tudo.</p>
+
+    <h3>Atributo</h3>
+    <p>Pares chave e valor pendurados no span: <code>http.route=/payments</code>, <code>http.status_code=503</code>, <code>service.version=2.14.1</code>. Atributo é o que permite filtrar “todos os spans de pagamento que deram 503 na versão nova”.</p>
+
+    <h3>Propagação de contexto</h3>
+    <p>Para o trace atravessar serviços, cada hop precisa repassar o trace_id para o próximo. Em HTTP isso vai num header padrão, o <code>traceparent</code> (especificação W3C Trace Context). Em fila, vai nos headers da mensagem. Se um serviço no meio não repassa, o trace quebra em dois pedaços que ninguém sabe que são o mesmo. Chamo isso de <strong>trace órfão</strong>, e ele é o failure mode mais comum que encontro.</p>
+
+    <h3>Métrica</h3>
+    <p>Número agregado ao longo do tempo. Não conta a história de uma request; conta o comportamento de milhares. Três formas básicas: <strong>contador</strong> (quantas requests, quantos erros), <strong>gauge</strong> (valor atual: conexões abertas no pool agora) e <strong>histograma</strong> (distribuição de duração, de onde sai p95 e p99). Métrica é boa para tendência, alerta e gate. É ruim para explicar um caso específico.</p>
+    <p>Uso muito o trio <strong>RED</strong> por serviço: Rate (requests por segundo), Errors (taxa de erro), Duration (duração em percentil). Se um serviço não expõe RED, ele não está pronto para ser testado sob carga.</p>
+
+    <h3>Log</h3>
+    <p>Fato pontual, com hora. Útil quando é <strong>estruturado</strong> (JSON com campos, não frase solta) e carrega o trace_id: <code>{"msg":"pagamento recusado","order_id":"A-8812","reason":"fraud_score","trace_id":"4bf9..."}</code>. Log sem trace_id é texto perdido num oceano.</p>
+
+    <h3>Correlação</h3>
+    <p>É o fio entre os três. A partir de um trace você pula para os logs daquela request. A partir de um pico na métrica você pula para traces de exemplo daquele pico (o nome técnico é <strong>exemplar</strong>: uma amostra de trace_id anexada a um ponto do histograma). Sem correlação, trace, métrica e log são três ilhas e quem investiga nada entre elas.</p>
+
+    <h3>OpenTelemetry</h3>
+    <p><strong>OpenTelemetry</strong> (OTel) é o padrão aberto para gerar e transportar esses sinais. Tem três peças que importam aqui: o <strong>SDK</strong> dentro de cada serviço (cria spans, métricas, logs), o <strong>collector</strong> (processo que recebe, filtra, amostra e repassa) e o <strong>exporter</strong> (quem envia para o backend onde você consulta, seja Jaeger, Tempo, Grafana, Datadog ou outro). A graça do OTel é que o código instrumenta uma vez e o destino muda por configuração.</p>
+
+    <h2>Visão de risco: por que isso é problema de QA</h2>
+    <p>Trato observabilidade no ambiente de teste com a mesma conta que uso para decidir o que testar: <strong>impacto × probabilidade × detectabilidade</strong>, cada um de 1 a 5. Detectabilidade alta significa difícil de detectar, então pontua mais.</p>
     <ul>
-      <li><strong>Trace:</strong> a história da request. Cada passo (HTTP, banco, fila, cache) vira um pedaço com tempo. Dá para ver onde a jornada engasgou.</li>
-      <li><strong>Métrica:</strong> número agregado no tempo. Taxa de erro, duração no p95 da jornada, saturação de pool. Bom para tendência e gate.</li>
-      <li><strong>Log:</strong> fato pontual. “pedido_id=… status=recusado motivo=…”. Bom para negócio e auditoria.</li>
+      <li><strong>Impacto:</strong> o que custa quando a falha chega ao usuário. Checkout lento em horário comercial é 5. Tooltip quebrado é 1.</li>
+      <li><strong>Probabilidade:</strong> chance de a mudança introduzir a falha. Sobe com número de hops, dependência compartilhada, pool, fila, cache. Um fluxo que passa por 7 serviços tem mais chance de regressão escondida que um CRUD isolado.</li>
+      <li><strong>Detectabilidade:</strong> quão cedo e quão claro a falha aparece. Aqui a observabilidade mexe diretamente.</li>
     </ul>
-    <p>O quarto item une os três: <strong>correlação</strong>. O mesmo identificador (trace_id) sai do teste, atravessa o BFF e chega no serviço. Sem isso, trace, métrica e log são ilhas. Eu padronizei: todo runner (API, e2e, carga) propaga o contexto de rastreio. O relatório de falha carrega o link do trace, não só o PNG.</p>
+    <p>A cena da quinta, em números: impacto 5, probabilidade 3, detectabilidade 4 (o teste viu, mas o sinal era um timeout genérico com screenshot de spinner). Score 5 × 3 × 4 = 60. Com o link do trace no relatório e o span de frete destacado, a detectabilidade cai para 2. Score 30. Nada no código do produto mudou. Mudou a chance de alguém entender o vermelho antes do merge.</p>
+    <p>É por isso que não aceito o argumento “observabilidade é coisa de SRE”. SRE cuida de produção. A pergunta de QA é outra: o sinal que eu já tenho às 16h40 é legível o bastante para impedir o incidente das 18h50?</p>
 
-    <h2>Por que isso é risco, não “ferramenta de SRE”</h2>
-    <p>Impacto: incidente com diagnóstico cego custa horas e reputação. Probabilidade: sobe quando o sistema tem muitos hops e o teste só olha a borda. Detectabilidade: sem telemetria no caminho do teste, o flake e a regressão de latência passam por “CI instável”.</p>
-    <p>Failure mode clássico: instrumentação só em produção, staging mudo, teste sem propagar contexto. Aí a post-mortem do job vermelho vira achismo (“rede”, “CI lento”).</p>
+    <h2>Failure modes que tornam o teste cego</h2>
+    <p>Antes de falar do que montar, o que costumo encontrar quando chego num time.</p>
 
-    <h2>O que eu exijo no ambiente de teste</h2>
+    <h3>Staging mudo</h3>
+    <p>Produção tem APM caro e completo. Staging e o ambiente efêmero do CI não exportam nada, “para economizar”. Resultado: o lugar onde mais se roda teste é o único sem sinal. O time descobre o comportamento do código novo pela primeira vez em produção.</p>
+
+    <h3>Contexto que morre no BFF</h3>
+    <p>O front gera <code>traceparent</code>, o BFF recebe, mas o cliente HTTP que ele usa para chamar os serviços de trás não foi instrumentado. O trace mostra um span de 2,3 s no BFF e nada embaixo. Parece que o BFF é lento. Não é.</p>
+
+    <h3>Trace órfão em fila</h3>
+    <p>Pedido criado publica evento em fila; o consumidor processa e chama pagamento. Sem propagar o contexto nos headers da mensagem, o consumidor inicia um trace novo. O e2e espera a confirmação, estoura o timeout, e o trace do teste termina em “mensagem publicada, 12 ms, ok”.</p>
+
+    <h3>Relógio torto</h3>
+    <p>Container do runner com relógio 4 s adiantado. Spans aparecem com duração negativa ou fora de ordem. Ninguém confia no trace e volta ao log. Sincronização de relógio (NTP) no runner é pré-requisito, não detalhe.</p>
+
+    <h3>Retry invisível</h3>
+    <p>O cliente HTTP faz 3 retries automáticos com backoff de 500 ms, 1 s e 2 s. Só a última tentativa vira span, ou nenhuma vira. O teste passa em 3,8 s, o budget era 2 s, e ninguém sabe que houve 3 falhas antes. Retry tem que gerar span próprio com <code>retry.attempt</code>.</p>
+
+    <h3>Span genérico</h3>
+    <p>Span chamado <code>HTTP GET</code> sem rota, ou rota com id cru (<code>/orders/88123</code>). No primeiro caso você não filtra nada; no segundo você explode cardinalidade, que explico mais abaixo.</p>
+
+    <h2>OpenTelemetry no ambiente de teste: o que eu exijo</h2>
+    <p>Desenhei esta lista depois de dois ambientes de teste que “tinham observabilidade” no slide e nenhuma resposta na prática.</p>
     <ol>
-      <li>Mesmas libs de telemetria de produção, destino diferente (collector de teste).</li>
-      <li>Atributos claros: ambiente, versão do serviço, id da execução do teste.</li>
-      <li>Propagação ligada em HTTP, gRPC e mensagem. Se quebra no BFF, o trace mente.</li>
-      <li>Sampling alto o bastante para investigar falha (em CI efêmero, muitas vezes 100%). Retenção curta: dias, não meses. Senão o custo mata a ideia.</li>
+      <li><strong>Mesmo SDK e mesma instrumentação de produção.</strong> Muda só o destino do exporter, que aponta para um collector de teste. Se o ambiente de teste usa outra lib ou outro nível de instrumentação, ele não prova nada sobre o comportamento instrumentado de produção.</li>
+      <li><strong>Atributos de recurso padronizados.</strong> Em todo serviço: <code>deployment.environment=ci</code> (ou <code>staging</code>), <code>service.name</code>, <code>service.version</code> com o SHA do commit. Sem a versão, você não separa o trace do código novo do trace do código antigo que ainda está de pé no mesmo cluster.</li>
+      <li><strong>Atributos do teste no span raiz.</strong> O runner injeta <code>test.run_id</code> (id do job no CI), <code>test.case</code> (nome do teste) e <code>test.attempt</code> (1, 2, 3 no rerun). Isso vai em <em>baggage</em>, o mecanismo do OTel para carregar chave e valor junto com o contexto, e o collector copia para os spans. Assim dá para pedir “todos os traces do run 48211, teste checkout_pix, tentativa 2”.</li>
+      <li><strong>Propagação em todos os transportes.</strong> HTTP, gRPC, fila, job agendado disparado pelo teste. Eu verifico com um teste de fumaça da própria telemetria: dispara uma request conhecida e confere se o trace tem a quantidade esperada de serviços. Se veio com 3 em vez de 6, algum hop quebrou o contexto.</li>
+      <li><strong>Sampling de 100% no CI.</strong> Explico o porquê na seção de sampling.</li>
+      <li><strong>Retenção curta.</strong> 7 dias para trace de CI, 14 para staging. Ninguém investiga flake de dois meses atrás, e retenção longa é o que faz o financeiro cortar a ideia.</li>
+      <li><strong>Collector com filtro de dado sensível.</strong> Ambiente de teste também recebe CPF, cartão mascarado mal feito e e-mail real copiado de produção. Processador no collector que remove ou mascara atributos conhecidos antes de exportar.</li>
     </ol>
-    <p>Ambiente “parecido com prod” sem telemetria não é parecido para QA. É caixa-preta mais cara.</p>
+    <p>Ambiente “parecido com produção” sem telemetria não é parecido para quem testa. É uma caixa-preta mais cara.</p>
 
-    <h2>Quando o e2e falha: o ritual</h2>
-    <p>No momento da falha (não amanhã):</p>
+    <h2>Fazendo o teste carregar o fio</h2>
+    <p>O teste é o primeiro hop. Se ele não inicia o trace, o trace começa no BFF e você perde a ligação com o caso de teste.</p>
+    <p><strong>Teste de API:</strong> o cliente HTTP do runner é instrumentado com o SDK do OTel. Cada caso abre um span raiz com o nome do teste, e as requests saem com <code>traceparent</code> automaticamente.</p>
+    <p><strong>E2E web:</strong> o browser não tem o SDK do runner. Faço de dois jeitos, conforme o front. Se o front já tem instrumentação web do OTel, ela gera o contexto e eu só leio o trace_id da resposta (muitos backends devolvem num header como <code>traceresponse</code> ou num header próprio). Se não tem, o runner intercepta as requests do browser (no Playwright, via <code>page.route</code> ou <code>extraHTTPHeaders</code>) e injeta um <code>traceparent</code> gerado no início do teste. Todas as requests daquele caso compartilham o mesmo trace_id, com spans filhos por request.</p>
+    <p><strong>Carga:</strong> k6 e similares geram <code>traceparent</code> por iteração. Junto, eu marco 1 em cada N iterações com atributo <code>load.sampled=true</code> para não afogar o collector; mais sobre isso adiante.</p>
+    <p>A regra de ouro: no fim de cada teste, o runner escreve o trace_id no próprio resultado. Não no log do console que ninguém lê. No relatório.</p>
+
+    <h2>O ritual quando o e2e falha</h2>
+    <p>Este é o ritual que padronizei para qualquer vermelho na suíte crítica. Ele cabe em 15 minutos e começa antes do rerun, nunca depois.</p>
+    <ol>
+      <li><strong>Abrir o trace do run que falhou</strong> pelo link no relatório. Não abrir o screenshot primeiro. O screenshot diz o que o usuário viu; o trace diz o que o sistema fez.</li>
+      <li><strong>Achar o span mais longo ou o primeiro com erro.</strong> Ordenar filhos por duração. Em 80% dos casos que vi, o culpado está nos três primeiros.</li>
+      <li><strong>Classificar a falha</strong> numa de cinco caixas:
+        <ul>
+          <li><em>Assert de negócio:</em> sistema respondeu rápido e certo do ponto de vista técnico, mas o valor está errado (frete R$ 0,00). Bug de produto.</li>
+          <li><em>Erro do servidor:</em> span com 5xx ou exceção registrada. Bug de produto ou de configuração.</li>
+          <li><em>Deadline:</em> nenhum erro, só lentidão até o timeout do teste. Pode ser regressão de performance ou saturação de ambiente.</li>
+          <li><em>Dependência externa:</em> span de PSP, antifraude sandbox, frete de terceiro com erro ou lentidão.</li>
+          <li><em>Lado do teste:</em> nenhum request saiu, ou saiu com dado errado. Seletor, massa, timing do próprio teste.</li>
+        </ul>
+      </li>
+      <li><strong>Comparar com um trace verde do mesmo teste</strong> na main de ontem. Mesma jornada, outro resultado. Onde a árvore diverge? Span novo, span mais longo, span faltando.</li>
+      <li><strong>Escrever a frase de evidência no PR.</strong> Formato fixo: “span X foi de A para B ms no serviço Y, versão Z”. Exemplo: “<code>POST /payments</code> foi de 80 ms para 2,1 s; 1,9 s estão em <code>fraud-check</code>, versão 3.4.0 subiu às 14h”.</li>
+      <li><strong>Só então decidir rerun.</strong> Rerun é legítimo quando a caixa é dependência externa conhecida e documentada. Na caixa “deadline” sem causa, rerun é proibido até alguém olhar a saturação.</li>
+    </ol>
+    <p>O efeito no time foi maior que eu esperava. A conversa no PR mudou de “seu teste quebrou de novo” para uma frase que o dono do serviço consegue agir sem rodar nada no notebook. E o dev parou de ver o QA como fonte de ruído.</p>
+
+    <h2>Um caso com números: 40% de falha às 11h</h2>
+    <p>A suíte de checkout tinha um padrão estranho: de madrugada, 0 ou 1 falha em 20 runs. Entre 10h e 12h, 40% dos runs vermelhos. A explicação oficial era “o CI fica lento de manhã”. Rerun resolvia, então ninguém investigava.</p>
+    <p>Puxei os traces dos runs vermelhos de uma semana nesse horário: 50 runs, 20 falhas. Em 18 das 20, o span <code>SELECT inventory_reservation</code> no serviço de estoque passou de 1,8 s. Nos verdes, o mesmo span ficava em 40 ms. Dentro do span, o tempo não era query; era <code>db.connection.wait</code>, espera por uma conexão livre no pool.</p>
+    <p>A conta que fechou o diagnóstico:</p>
     <ul>
-      <li>Capturar o trace_id da request raiz.</li>
-      <li>Anexar no report o link do Trace UI.</li>
-      <li>Classificar: assert de negócio, 5xx, deadline, dependência externa.</li>
+      <li>Pool do serviço de estoque em staging: 10 conexões.</li>
+      <li>Cada request segura a conexão por uns 120 ms (query mais lógica dentro da transação).</li>
+      <li>Capacidade máxima do pool: 10 conexões ÷ 0,12 s = cerca de 83 requests por segundo.</li>
+      <li>A suíte e2e, com 8 workers em paralelo, gerava uns 40 requests por segundo ao estoque.</li>
+      <li>Entre 10h e 12h rodava um job de sincronização de catálogo de outro time, também em staging, batendo 60 requests por segundo no mesmo serviço.</li>
+      <li>Total: 100 requests por segundo contra capacidade de 83. Fila crescendo, espera por conexão subindo até estourar o timeout do teste.</li>
     </ul>
-    <p>A conversa no PR muda. De “seu teste quebrou” para “o span POST /payments foi de 80 ms para 2,1 s no hop do fraud-check”. O dono do serviço vê a evidência sem reproduzir no notebook.</p>
+    <p>Não era seletor, não era rede, não era “CI lento”. Era saturação de um recurso compartilhado, e o mesmo pool, em produção, tinha 20 conexões para um pico de tráfego de 150 requests por segundo na Black (capacidade de 166). Margem de 10%. O teste estava avisando de um risco real de produção, e a resposta do time por meses foi clicar em rerun.</p>
+    <p>Dois tickets saíram dali: separar o job de sincronização em horário ou ambiente próprio, e revisar o pool de produção com o pessoal de plataforma. Nenhuma linha de Page Object mudou.</p>
 
-    <h3>Exemplo com números</h3>
-    <p>Checkout e2e falha em 40% dos runs às 11h. Sem trace: “instável”. Com trace: 9 de 10 falhas concentram 1,8 s no mesmo span de estoque; pool de conexão em espera. Não é seletor. É saturação. Você para de reescrever Page Object e abre o ticket certo.</p>
+    <h2>Provando a correção com sinal</h2>
+    <p>Bug corrigido sem sinal de verificação é fé. “Rodei e passou” não prova nada sobre um problema que aparecia em 40% das vezes; passar uma vez tinha 60% de chance mesmo sem correção.</p>
+    <p>Uso duas evidências juntas.</p>
+    <p><strong>Primeira: o sinal que explicava a falha mudou.</strong> No caso do estoque, a métrica de espera por conexão no p95 foi de 1,6 s para 5 ms no mesmo horário, e o span <code>SELECT inventory_reservation</code> voltou para 45 ms no p95. Se o sinal causal não mudou e o teste ficou verde, desconfio que a correção foi sorte ou que mascarou o sintoma (aumentar o timeout do teste é o exemplo clássico).</p>
+    <p><strong>Segunda: o teste passa com frequência que tem significado estatístico.</strong> Rodei a suíte 60 vezes na janela das 10h às 12h. Zero falhas. Quanto isso prova? Tem uma regra de bolso chamada <strong>regra de três</strong>: se você observou 0 falhas em n tentativas, a taxa real de falha, com 95% de confiança, está abaixo de 3/n. Com 60 runs: 3/60 = 5%. Saímos de 40% para “provavelmente abaixo de 5%”. Para a suíte de merge eu quero abaixo de 2%, então mantive o acompanhamento por mais uma semana: 0 em 150 runs, 3/150 = 2%.</p>
+    <p>Dá para conferir a regra na mão: se a taxa real fosse 5%, a chance de 60 runs seguidos sem falha seria 0,95 elevado a 60, que dá uns 0,046. Menos de 5% de chance. Por isso 60 runs limpos sustentam a frase.</p>
+    <p>A mensagem no ticket virou um padrão: causa (span e métrica), correção (o que mudou), prova de sinal (antes e depois, mesma janela), prova de frequência (n runs, regra de três). Quatro linhas que qualquer pessoa audita.</p>
 
-    <h2>Performance e correção: o mesmo fio</h2>
-    <p>Job de carga que só mostra p95 alto aponta sintoma. Com trace você separa: query lenta, retry, cold start, serialização. Budget por jornada: teto no span raiz e nos filhos críticos. O CI fala o hop culpado.</p>
-    <p>Bug fix sem sinal de verificação é fé. Combino: teste que reproduzia a falha (agora verde) + métrica ou span que mostra o comportamento novo na janela do deploy. “Corrigimos” sem prova no sinal é narrativa.</p>
-
-    <h2>Golden journeys instrumentadas</h2>
-    <p>Escolha 1–3 jornadas de receita ou risco. Em cada uma: eventos de negócio (pedido criado, pagamento aprovado), atributos de etapa, alertas alinhados ao que o teste já cobre. Assim teste e produção falam a mesma língua.</p>
-
-    <h2>Quando a telemetria só atrapalha</h2>
-    <p>Instrumentar tudo explode cardinalidade e conta. Ninguém olha. Sinais por risco. Dashboard sem dono. Trace sem link no report de teste. Sampling 1% em staging quando você investiga flake. Log com PII no collector de teste.</p>
-
-    <h2>Nas próximas duas sprints</h2>
+    <h2>Golden journeys: onde o teste e a produção falam a mesma língua</h2>
+    <p><strong>Golden journey</strong> é uma jornada que, se quebrar, o negócio sente na hora: receita, cadastro, login, pagamento de fatura. Escolho de 1 a 3 por produto. Mais que isso e nenhuma recebe atenção de verdade.</p>
+    <p>Para cada uma, desenhei quatro coisas:</p>
     <ol>
-      <li>Faça o e2e crítico propagar e imprimir trace_id no report.</li>
-      <li>Ligue export OTel no ambiente onde a suíte roda, com retenção curta.</li>
-      <li>No próximo vermelho, abra o trace antes de culpar seletor.</li>
-      <li>Escolha uma golden journey e amarre um budget de latência a um span nomeado.</li>
-      <li>Para o próximo bug P1, defina qual sinal prova a correção além do teste verde.</li>
+      <li><strong>Nomes de span estáveis e de negócio.</strong> <code>checkout.quote_freight</code>, <code>checkout.authorize_payment</code>, <code>checkout.confirm_order</code>. Não <code>HTTP POST</code>. O nome sobrevive à troca de framework.</li>
+      <li><strong>Budget de latência por span.</strong> O orçamento do raiz e dos filhos críticos. Exemplo de checkout: raiz 1.200 ms no p95; carrinho 150 ms, frete 300 ms, pagamento 600 ms (dos quais antifraude 250 ms), confirmação 100 ms. Soma dos filhos: 1.150 ms, deixando 50 ms de folga para rede e serialização. Se a soma passa o raiz, o budget é mentira e eu renegocio antes de usar.</li>
+      <li><strong>Eventos de negócio como log estruturado ou evento de span.</strong> <code>order.created</code>, <code>payment.approved</code>, <code>payment.declined</code> com motivo. O e2e verifica que o evento aconteceu, não só que a tela mudou.</li>
+      <li><strong>Alerta de produção alinhado ao assert do teste.</strong> Se o e2e afirma “pagamento aprovado em até 600 ms no p95 do span”, o alerta de produção vigia o mesmo span com o mesmo número. Teste e produção passam a falhar pela mesma razão, com o mesmo nome.</li>
+    </ol>
+    <p>O ganho que mais me importa: quando o incidente acontece, o pessoal de plataforma abre o mesmo span que o QA usou no PR. Não existe tradução entre “o teste de checkout” e “o serviço de pagamento”. É o mesmo objeto. Para mim, isso é Qualidade de software que protege o produto: o sinal de teste e o sinal de produção são o mesmo sinal, em momentos diferentes.</p>
+
+    <h2>Sampling: quanto trace você guarda</h2>
+    <p><strong>Sampling</strong> é a decisão de quais traces guardar. Produção costuma guardar uma fração, porque guardar tudo custa caro. Existem dois modos:</p>
+    <ul>
+      <li><strong>Head sampling:</strong> decide no início da request, no primeiro hop, sem saber como ela vai terminar. Exemplo: guarda 1% ao acaso. Barato e simples.</li>
+      <li><strong>Tail sampling:</strong> o collector segura todos os spans por alguns segundos, espera a request terminar e decide depois. Exemplo: guarda 100% dos traces com erro ou acima de 2 s, e 1% dos normais. Mais útil, mais memória no collector.</li>
+    </ul>
+    <p>Por que exijo 100% no CI: a suíte de checkout roda uns 1.500 testes por dia. Se a taxa de falha é 2%, são 30 falhas por dia. Com head sampling de 1%, o número esperado de falhas com trace guardado é 30 × 0,01 = 0,3 por dia. Você investiga uma falha a cada três dias, se tiver sorte. Com 100%, todas.</p>
+    <p>E o custo? Conta na mão: 1.500 testes × 300 spans por teste em média × 1 KB por span = 450 MB por dia. Sete dias de retenção: pouco mais de 3 GB. É menos que o cache de dependências do próprio pipeline. O argumento de custo quase sempre vem de quem aplicou a configuração de produção em staging sem fazer a conta.</p>
+    <p>Na carga é diferente. 200 usuários virtuais por 30 minutos com 10 requests por iteração geram milhões de spans. Ali uso tail sampling: 100% dos erros, 100% acima do budget, 5% do resto. Os traces lentos são exatamente os que eu quero; os rápidos servem de base de comparação e 5% basta.</p>
+
+    <h2>Cardinalidade: o jeito mais rápido de quebrar o backend de métrica</h2>
+    <p><strong>Cardinalidade</strong> é o número de combinações distintas de rótulos numa métrica. Cada combinação vira uma série temporal que o backend precisa guardar separadamente.</p>
+    <p>Métrica <code>http_request_duration</code> com rótulos <code>route</code> (20 rotas), <code>method</code> (4), <code>status</code> (6): 20 × 4 × 6 = 480 séries. Tranquilo.</p>
+    <p>Agora alguém do time de teste, bem-intencionado, adiciona <code>test_run_id</code> como rótulo da métrica, “para filtrar por execução”. 1.500 execuções por dia × 480 = 720 mil séries novas por dia. Em uma semana, 5 milhões. O backend de métrica de staging cai, e a culpa vai para “a observabilidade do QA”.</p>
+    <p>Regra que aplico sem exceção: identificador de alta variação (run_id, user_id, order_id, trace_id) vai em <strong>atributo de span</strong> ou <strong>campo de log</strong>, nunca em <strong>rótulo de métrica</strong>. Trace e log foram feitos para dado individual. Métrica foi feita para agregado. Se precisar ligar um ponto da métrica a uma execução, use exemplar, que guarda alguns trace_id por ponto sem criar série nova.</p>
+    <p>O mesmo vale para rota com id cru. <code>/orders/88123</code> como rótulo é uma série por pedido. Normalize para <code>/orders/{id}</code> na instrumentação.</p>
+
+    <h2>Quando a telemetria atrapalha</h2>
+    <p>Observabilidade mal desenhada vira ruído caro, e ruído caro é cortado no primeiro corte de orçamento. Os anti-padrões que já vi derrubar a iniciativa:</p>
+    <ul>
+      <li><strong>Instrumentar tudo no dia um.</strong> 400 spans por request, metade com nome genérico. Ninguém encontra nada. Comece pelas golden journeys e amplie onde uma investigação real pediu.</li>
+      <li><strong>Dashboard órfão.</strong> Quarenta painéis criados num hackathon, nenhum dono, nenhum alerta ligado. Se ninguém olhou em 30 dias, apague.</li>
+      <li><strong>Alerta que duplica o teste.</strong> Alerta de staging dispara toda vez que o e2e de erro proposital roda. Em uma semana o canal está silenciado. Filtre por <code>test.case</code> conhecido ou rode cenário de erro com atributo próprio.</li>
+      <li><strong>Log usado como trace.</strong> Logar “entrou na função X” e “saiu da função X” com timestamp para medir duração. É um trace mal feito, mais caro e sem árvore.</li>
+      <li><strong>PII no collector de teste.</strong> Massa copiada de produção com e-mail e CPF reais indo para um backend de terceiro com retenção padrão. Problema de compliance que mata o projeto inteiro.</li>
+      <li><strong>Configuração de produção em staging.</strong> Sampling de 1% herdado onde você precisa investigar flake. Resultado: “não tem trace dessa falha” vira a resposta padrão e o time desiste.</li>
+      <li><strong>Overhead não medido.</strong> Instrumentação que adiciona 15 ms por span em serviço com 30 spans por request. Meço o p95 da jornada com e sem export antes de ligar tudo; acima de 3% de overhead, revejo.</li>
+    </ul>
+
+    <h2>Ligando o trace ao relatório de CI</h2>
+    <p>Tudo isso morre se o link não estiver onde a pessoa olha primeiro. Quem investiga começa pelo relatório do CI ou pelo comentário no PR. Não pela UI de trace.</p>
+    <p>O que montei:</p>
+    <ol>
+      <li><strong>O runner grava o trace_id em cada resultado.</strong> No Playwright, como anotação do teste (<code>testInfo.annotations</code>); no formato JUnit XML, como <code>property</code> do <code>testcase</code>. Qualquer leitor de relatório mostra o campo.</li>
+      <li><strong>O link é montado com o trace_id e o intervalo de tempo.</strong> A URL da UI de trace com o id e uma janela de mais ou menos 5 minutos em torno da execução. Sem a janela, algumas UIs procuram nas últimas 24 h e demoram.</li>
+      <li><strong>O comentário automático no PR traz o resumo, não só o link.</strong> Para cada teste falho: nome, caixa de classificação provável (5xx, deadline, assert), os três spans mais longos com duração e serviço, e o link. Exemplo de linha: <em>checkout_pix · deadline · checkout.authorize_payment 2.140 ms (budget 600) em payment-svc 3.4.0 · ver trace</em>.</li>
+      <li><strong>Comparação automática com o verde.</strong> O comentário inclui a duração do mesmo span no último run verde da main. “2.140 ms agora, 92 ms ontem.” Isso sozinho já responde metade das perguntas.</li>
+      <li><strong>Histórico por teste.</strong> Um painel simples com, por teste crítico, a taxa de falha dos últimos 14 dias e a distribuição de caixas. Se 70% das falhas de um teste são “deadline” no mesmo serviço, o problema não é o teste.</li>
+    </ol>
+    <p>A classificação automática erra, e tudo bem. Ela é ponto de partida. Desde que montei, o tempo entre vermelho e primeira hipótese útil caiu de algo como 40 minutos (rerun, esperar, olhar screenshot, perguntar no canal) para uns 5 minutos na suíte de checkout.</p>
+
+    <h2>O que muda no próximo job vermelho</h2>
+    <ol>
+      <li>Escolha a golden journey que mais dói e faça o teste dela iniciar o trace e gravar o trace_id no relatório. Só essa, nesta semana.</li>
+      <li>Ligue o export OTel no ambiente onde a suíte roda, com sampling de 100%, retenção de 7 dias e filtro de PII no collector.</li>
+      <li>Rode um trace de fumaça e conte os serviços. Se faltar hop, corrija a propagação antes de confiar em qualquer conclusão.</li>
+      <li>Adote o ritual de 15 minutos e proíba rerun em falha de “deadline” sem olhar o trace.</li>
+      <li>Nomeie os spans da jornada com nome de negócio e escreva o budget de cada um, conferindo que a soma cabe no raiz.</li>
+      <li>No próximo bug corrigido, feche o ticket com as quatro linhas: causa, correção, sinal antes e depois, n runs com a regra de três.</li>
     </ol>
 
-    <p>Screenshot mostra a tela. Trace mostra o sistema. Qualidade que só olha a tela reza no rerun. Qualidade que olha o fio corrige a causa.</p>
+    <p>Screenshot mostra a tela. Trace mostra o sistema. O vermelho das 16h40 já sabia do incidente das 18h50; o que faltava era um caminho curto entre a falha e a causa. Montar esse caminho é trabalho de QA, e é o trabalho que transforma rerun em diagnóstico.</p>
 
     <div class="article__foot">
       <a href="../index.html#artigos">← Voltar aos artigos</a>

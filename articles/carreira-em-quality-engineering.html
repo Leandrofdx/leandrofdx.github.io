@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Carreira em Quality Engineering: o que sobe o nível de verdade — Leandro Lima</title>
-  <meta name="description" content="Como evoluir em QE: impacto no risco, parceria com produto e engenharia, evidência de decisão, e o que deixa de contar como crescimento." />
+  <meta name="description" content="Carreira em QE sem currículo de ferramenta: impacto, influência, escopo e autonomia; sinais de estagnação; o que treinar; evidência de promoção com antes e depois; e o que Staff faz de diferente." />
   <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="article.css" />
   <link rel="stylesheet" href="../covers.css?v=11" />
@@ -23,54 +23,168 @@
     </div>
     <span class="article__tag">Carreira</span>
     <h1>Carreira em Quality Engineering: o que sobe o nível de verdade</h1>
-    <p class="article__meta">Leitura ~14 min · Quality Engineering</p>
+    <p class="article__meta">Leitura ~18 min · Quality Engineering</p>
 
-    <p>O currículo lista Selenium, Cypress, Postman, ISTQB. Em entrevista perguntam: “quando você disse não subir e o time ainda assim foi, o que você fez depois?” Silêncio. Ferramenta não sobe nível. Decisão sob risco sobe.</p>
-    <p>QE sênior não é quem escreveu mais e2e. É quem muda a probabilidade de dor cara com evidência, parceria e freio no momento certo.</p>
+    <p>Terça, 15h. Entrevista para Senior QE. O currículo da pessoa é bom: Selenium, Cypress, Playwright, Postman, k6, ISTQB, dois cursos de IA aplicada a teste. Eu faço uma pergunta só: “Me conta uma vez em que você recomendou não subir, o time subiu mesmo assim, e o que você fez depois.”</p>
+    <p>Silêncio. Depois vem a resposta honesta: “Eu registrei o bug no Jira e avisei no canal.” Fim. Nenhum risco residual nomeado, nenhuma mitigação proposta, nenhuma mudança no processo depois. A pessoa testou muito. Mas nunca esteve no lugar onde a decisão acontece.</p>
+    <p>Já sentei do outro lado da mesa também. Passei anos achando que o próximo nível vinha da próxima ferramenta. Não veio. O que mudou minha carreira foi quando comecei a ser chamado antes do go, não depois do bug. Ferramenta é meio. O nível sobe quando você muda a probabilidade de dor cara no produto, com evidência, e consegue mostrar isso.</p>
 
     <div class="callout">
-      <p>Qualidade de software que protege o produto. Se o seu trabalho não altera risco residual, é atividade. Não é carreira.</p>
+      <p>Currículo diz o que você sabe usar. Carreira mostra o que mudou porque você estava na sala.</p>
     </div>
 
-    <h2>O eixo que importa</h2>
-    <p>Impacto no produto: escapes evitados, tempo de detecção, custo de release. Influência: produto e eng pedem sua leitura antes do go. Escopo: de um time para sistema. Autonomia: você define estratégia; não só executa checklist.</p>
-
-    <h2>Sinais de que você está preso</h2>
+    <h2>Currículo versus decisão sob risco</h2>
+    <p>Separo duas coisas que quase todo plano de carreira de QA mistura.</p>
+    <p><strong>Currículo</strong> é inventário de capacidade: ferramentas, linguagens, certificações, frameworks que você já montou. Responde à pergunta “essa pessoa consegue executar?”. É necessário. Ninguém vira Staff sem saber automatizar, ler código e montar pipeline.</p>
+    <p><strong>Decisão sob risco</strong> é o que você faz quando a informação está incompleta, o clock está curto e alguém precisa escolher. Responde à pergunta “quando essa pessoa fala, o resultado muda?”. É isso que separa níveis.</p>
+    <p>Um exemplo concreto. Duas pessoas no mesmo time recebem a mesma mudança: novo cálculo de juros no parcelamento.</p>
     <ul>
-      <li>Só recebe casos prontos; não entra em discovery.</li>
-      <li>Verde da suíte é a única métrica que alguém olha.</li>
-      <li>Você não sabe o p95 nem o caminho de dinheiro do produto.</li>
-      <li>Promoção = mais casos, não mais decisão.</li>
+      <li><strong>Pessoa A</strong> escreve 30 cenários E2E cobrindo combinações de parcela, roda tudo, reporta “100% passou”.</li>
+      <li><strong>Pessoa B</strong> lê o diff, percebe que o arredondamento mudou de <code>HALF_UP</code> para <code>HALF_EVEN</code>, pergunta ao financeiro qual é a regra contratual, descobre que o contrato diz centavo para cima, escreve três testes de caracterização no serviço com valores que expõem a diferença (R$ 100,005 em 3x), e registra que o export contábil também usa essa função.</li>
+    </ul>
+    <p>A Pessoa A tem mais testes. A Pessoa B evitou um problema regulatório e mudou o escopo da validação. Em calibração de promoção, a A apresenta volume. A B apresenta uma decisão com consequência. Adivinha quem sobe.</p>
+    <p>A armadilha é que o mercado de vagas premia o currículo na triagem e a empresa premia a decisão na promoção. Quem só otimiza para triagem fica bom em entrar e ruim em subir.</p>
+
+    <h2>Os quatro eixos que eu uso para ler nível</h2>
+    <p>Toda matriz de carreira séria, com nomes diferentes, mede mais ou menos as mesmas coisas. Eu reduzo a quatro eixos. Em cada um descrevo como parece em Pleno, Sênior e Staff, porque o eixo sem exemplo vira adjetivo.</p>
+
+    <h3>Impacto: o que mudou no produto</h3>
+    <p>Pergunta que o eixo responde: se você saísse amanhã, o que pioraria em números?</p>
+    <ul>
+      <li><strong>Pleno:</strong> entrega a cobertura da feature com qualidade. Impacto é local e vem da execução.</li>
+      <li><strong>Sênior:</strong> reduz escape numa área. Exemplo: “escapes de checkout caíram de 6 para 2 por trimestre depois que movi validação de cupom para contrato”.</li>
+      <li><strong>Staff:</strong> altera uma métrica de organização. Exemplo: “lead time de release caiu de 3 dias para 6 horas porque o gate passou de suite E2E completa para smoke dos irreversíveis mais canary com critério de abort”.</li>
     </ul>
 
-    <h2>O que treinar de propósito</h2>
-    <ol>
-      <li><strong>Risco:</strong> I × P × D em linguagem de negócio. Sem jargão vazio.</li>
-      <li><strong>Sistema:</strong> latência, contrato, dado, observabilidade. O e2e é uma fatia.</li>
-      <li><strong>Comunicação:</strong> go/no-go com evidência; “não sei” com plano de descoberta.</li>
-      <li><strong>Plataforma:</strong> CI, ambiente, flake como produto interno.</li>
-      <li><strong>Parceria:</strong> Product Engineer e Tech Lead como aliados, não clientes de bug.</li>
-    </ol>
+    <h3>Influência: quem muda o que faz por causa de você</h3>
+    <p>Pergunta: sua leitura de risco é pedida ou tolerada?</p>
+    <ul>
+      <li><strong>Pleno:</strong> o time aceita seus bugs e sugestões quando você traz.</li>
+      <li><strong>Sênior:</strong> PM e Tech Lead perguntam sua leitura antes do go. Você está no refinamento sem ser convidado por obrigação.</li>
+      <li><strong>Staff:</strong> times que não reportam a você adotam uma prática que você desenhou. Exemplo: o template de risco residual que nasceu no time de pagamentos virou campo obrigatório no RC de quatro squads.</li>
+    </ul>
 
-    <h2>Evidência para promoção (e para você)</h2>
-    <p>Antes/depois mensurável: escapes, tempo até sinal, custo de suíte. Decisão documentada que evitou incidente. Programa (contrato, a11y, perf) com dono e resultado. Mentoria que mudou como o time testa, não só “ajudei o júnior”.</p>
-    <p>Portfolio útil: um parágrafo por caso com contexto, decisão, evidência e resultado. “Implementei Cypress” não conta. “Cortei 40% do e2e e a taxa de escape de checkout caiu” conta.</p>
+    <h3>Escopo: o tamanho do problema</h3>
+    <p>Pergunta: qual é o maior sistema cuja qualidade você consegue explicar?</p>
+    <ul>
+      <li><strong>Pleno:</strong> uma feature ou um fluxo.</li>
+      <li><strong>Sênior:</strong> um produto ou domínio inteiro, incluindo integrações e dados.</li>
+      <li><strong>Staff:</strong> o sistema entre times. Contrato entre serviços de squads diferentes, plataforma de CI compartilhada, estratégia de ambiente, política de flag.</li>
+    </ul>
+
+    <h3>Autonomia: quem define o problema</h3>
+    <p>Pergunta: você recebe o problema pronto ou descobre qual problema vale resolver?</p>
+    <ul>
+      <li><strong>Pleno:</strong> recebe tarefa clara, resolve bem, pede ajuda no ambíguo.</li>
+      <li><strong>Sênior:</strong> recebe objetivo (“reduzir escape no checkout”) e define o plano.</li>
+      <li><strong>Staff:</strong> identifica o objetivo antes de alguém pedir. “Ninguém pediu, mas 40% dos incidentes do semestre vieram de contrato quebrado entre times. Proponho contract testing no pipeline de quem publica.”</li>
+    </ul>
+    <p>Um aviso que aprendi caro: dá para ser muito forte em um eixo e travar a promoção por outro. O caso mais comum que vejo é QE com impacto alto e escopo pequeno. Excelente no próprio time, invisível fora dele. A calibração lê isso como “Sênior muito bom”, não como Staff.</p>
+
+    <h2>Sinais de que você está preso</h2>
+    <p>Estagnação raramente parece estagnação. Parece estar ocupado. Estes são os sinais que eu procuro em mim e em quem eu mentoro:</p>
+    <ul>
+      <li><strong>Você só recebe casos prontos.</strong> A história chega refinada, com critério de aceite, e seu trabalho começa ali. Se você não participa de discovery, não consegue mudar o risco na origem.</li>
+      <li><strong>Verde da suíte é a única métrica que alguém olha.</strong> Ninguém pergunta sobre escape, tempo até sinal ou custo de execução. Seu trabalho vira um semáforo.</li>
+      <li><strong>Você não sabe o p95 nem o caminho do dinheiro.</strong> Pergunte a si mesmo: qual é a latência típica do pay? Onde o valor muda de mãos no fluxo? Que job fecha o caixa à meia-noite? Se não sabe, você testa telas, não o produto.</li>
+      <li><strong>Promoção conversada como volume.</strong> “Você automatizou 200 cenários este ano, ótimo.” Se esse é o elogio, a régua está medindo atividade.</li>
+      <li><strong>Seu nome aparece depois do incidente, nunca antes.</strong> Você é chamado para reproduzir, não para prever.</li>
+      <li><strong>Mesma stack, mesmo problema, terceiro ano.</strong> Trocou Selenium por Cypress por Playwright, e o flake continua no mesmo patamar.</li>
+      <li><strong>Seu 1:1 é sobre tarefas.</strong> Nunca sobre uma decisão difícil que você tomou ou deixou de tomar.</li>
+    </ul>
+    <p>Três ou mais desses e o problema não é esforço. É posição. Mais horas no mesmo lugar não mudam o nível.</p>
+
+    <h2>O que treinar de propósito</h2>
+    <p>Cinco músculos. Para cada um, como treino na prática e como sei que melhorou.</p>
+
+    <h3>1. Risco em linguagem de negócio</h3>
+    <p>Saber pontuar impacto, probabilidade e detectabilidade é o começo. O treino real é traduzir isso para quem decide. “Teste de idempotência falhou” não move PM. “Se o PSP der timeout e o cliente clicar de novo, cobramos duas vezes; estimativa de 0,3% dos pedidos em pico, uns 120 por dia de campanha” move.</p>
+    <p><strong>Treino:</strong> em todo RC, escrevo o risco residual em uma frase que um diretor entende sem perguntar nada. <strong>Sinal de melhora:</strong> produto passa a citar sua frase na reunião seguinte sem você estar lá.</p>
+
+    <h3>2. Sistema, não tela</h3>
+    <p>O E2E é uma fatia fina do sistema. Bug caro mora em latência, contrato, dado e observabilidade. Quem só vê a UI testa o sintoma.</p>
+    <p><strong>Treino:</strong> para cada feature, desenho o fluxo de dados no papel. Quais serviços, que fila, que banco, que job assíncrono, que cache. Depois pergunto em cada seta: o que acontece se isso atrasar 5 segundos, duplicar ou chegar fora de ordem? <strong>Sinal de melhora:</strong> você acha bug antes de existir tela.</p>
+
+    <h3>3. Comunicação de go e no-go</h3>
+    <p>Dois formatos que eu pratico até sair automático.</p>
+    <p><strong>Go com ressalva:</strong> “Recomendo subir. Protegemos estorno e export financeiro. Ficou de fora o banner da campanha em Android 9. Mitigação: flag. Quem aceita: Marina.”</p>
+    <p><strong>“Não sei” com plano:</strong> “Não tenho evidência sobre o comportamento sob 3x de carga. Consigo um cenário k6 no endpoint em duas horas. Se não der tempo, a mitigação é canary de 5% com abort em p95 acima de 800 ms.”</p>
+    <p>“Não sei” sem plano soa fraco. “Não sei” com plano de descoberta e custo é o que mais gera confiança em liderança técnica.</p>
+
+    <h3>4. Plataforma como produto interno</h3>
+    <p>CI, ambiente, massa de dados e flake são produto. Têm usuários (os devs), têm SLA implícito (quanto tempo o pipeline leva), têm custo. Quem trata isso como “infra de QA” fica preso no time. Quem trata como produto ganha escopo.</p>
+    <p><strong>Treino:</strong> meço três números do pipeline que eu toco: tempo até primeiro sinal, taxa de flake por semana, quantos reruns por PR. Escolho um e melhoro com prazo. <strong>Sinal de melhora:</strong> dev de outro time te procura para perguntar como fez.</p>
+
+    <h3>5. Parceria com Product Engineer e Tech Lead</h3>
+    <p>Durante muito tempo tratei dev como cliente de bug: eu achava, eles corrigiam. Isso me colocava no fim da fila. A virada foi tratar Product Engineer e Tech Lead como sócios de risco.</p>
+    <p>Na prática: com o Tech Lead, combino antes da sprint onde o risco técnico está e quem cobre o quê (unit e contrato com dev, exploratório e caracterização comigo). Com o Product Engineer, entro no desenho da solução e pergunto o que acontece no estado de erro antes do código existir. <strong>Sinal de melhora:</strong> o TL te marca no design doc sem você pedir.</p>
+
+    <h2>Evidência para promoção: antes e depois</h2>
+    <p>Calibração não promove adjetivo. Promove evidência. E evidência de QE tem um formato que funciona: antes, intervenção, depois, e por que a mudança é sua.</p>
+    <p>Exemplos reais do tipo que eu levo ou ajudo a montar:</p>
+    <ul>
+      <li><strong>Escape:</strong> antes, 7 incidentes de severidade alta no checkout em dois trimestres. Intervenção: contrato entre carrinho e frete no pipeline do publicador, mais smoke bloqueante de cupom. Depois, 1 incidente em dois trimestres, não relacionado a contrato.</li>
+      <li><strong>Tempo até sinal:</strong> antes, PR esperava 52 minutos pela suíte. Intervenção: separei smoke de 6 minutos bloqueante e regressão completa em nightly com dono rotativo. Depois, 8 minutos até primeiro sinal; regressão noturna acha o mesmo número de bugs.</li>
+      <li><strong>Custo de suíte:</strong> antes, 410 cenários E2E, 14% de flake semanal. Intervenção: cortei 160 que duplicavam unit ou contrato, quarentena com SLA de 5 dias para o resto. Depois, 250 cenários, 2% de flake, nenhum aumento de escape.</li>
+      <li><strong>Decisão evitada:</strong> recomendei não subir a migração de saldo numa sexta. Documentei o motivo (migration sem rollback testado). Na segunda, rodamos em cópia e achamos truncamento em 0,4% das contas.</li>
+      <li><strong>Mentoria com efeito:</strong> não “ajudei o júnior”. Sim “a pessoa que mentorei passou a conduzir o ritual de risco do squad sozinha em três meses; o squad parou de subir RC sem lista de não-testado”.</li>
+    </ul>
+    <p>Repare no padrão: todo item tem número ou fato verificável, e todo item mostra uma mudança que não teria acontecido sem você. Se o depois teria acontecido de qualquer jeito, não é evidência sua.</p>
+    <p>Uma regra que uso: começo a guardar evidência no primeiro dia do ciclo, não na semana da autoavaliação. Um arquivo simples, uma linha por semana. Na hora da calibração, memória reconstrói tudo mais bonito e menos verificável.</p>
 
     <h2>O que para de contar</h2>
-    <p>Certificado sem aplicação. Contagem de casos. Stack nova a cada ano sem problema resolvido. “Garantir qualidade” sem dizer risco residual. Postura de polícia no PR.</p>
+    <p>Cada nível tem coisas que antes eram mérito e passam a ser só esperado. Insistir nelas como evidência é sinal de que você ainda está medindo com a régua antiga.</p>
+    <ul>
+      <li><strong>Certificado sem aplicação.</strong> ISTQB ajuda a ter vocabulário. Na calibração de Sênior em diante, ninguém pergunta. Perguntam o que você fez com ele.</li>
+      <li><strong>Contagem de casos.</strong> “Escrevi 300 testes” é dado de produtividade, não de impacto. Pode até ser negativo, se 100 deles são flake.</li>
+      <li><strong>Stack nova sem problema resolvido.</strong> Migrar de framework é custo. Só vira evidência se resolveu algo que o anterior não resolvia, com número.</li>
+      <li><strong>“Garantir qualidade” sem risco residual.</strong> Ninguém garante. Quem diz que garante perdeu credibilidade no primeiro incidente.</li>
+      <li><strong>Postura de polícia no PR.</strong> Bloquear merge com comentário de estilo de teste, sem conversar antes, gera atrito e nenhum aprendizado. Em nível alto, isso é lido como imaturidade.</li>
+      <li><strong>Heroísmo de madrugada.</strong> Virar a noite para salvar release é visível e emocionante. Em Staff, a pergunta é por que o sistema dependia de alguém virar a noite.</li>
+    </ul>
 
-    <h2>Staff na prática</h2>
-    <p>Staff QE muda o sistema: CI, contrato entre times, linguagem de risco com produto, plataforma de teste. Não é o júnior mais rápido em Page Object. Se o seu dia ainda é só executar o que chegaram, o nível não sobe com mais horas. Sobe com escopo de decisão.</p>
-
-    <h2>Se o próximo passo está confuso</h2>
+    <h2>Staff na prática: mudar o sistema</h2>
+    <p>Qualidade de software que protege o produto, em nível Staff, não sai das minhas mãos testando. Sai de mudanças no sistema que fazem outras pessoas acertarem mais sem depender de mim.</p>
+    <p>A diferença que eu uso para me checar: Sênior resolve o problema. Staff muda o sistema para que aquela classe de problema pare de aparecer.</p>
+    <p>Três exemplos de mudança de sistema que eu considero trabalho de Staff:</p>
     <ol>
-      <li>Escreva três decisões de risco que você influenciou nos últimos seis meses.</li>
-      <li>Escolha um buraco do sistema (contrato, perf, observabilidade) e feche com evidência.</li>
-      <li>Peça feedback ao PE e ao TL: “onde minha leitura de risco ainda é fraca?”</li>
-      <li>Troque uma métrica de volume por uma de outcome no seu 1:1.</li>
+      <li><strong>Contrato entre times.</strong> O problema local era “o frete mudou o payload e quebrou o checkout”. A correção Sênior é um teste no checkout. A mudança de sistema é contract testing no pipeline de quem publica, com o consumidor declarando o que usa. A quebra passa a ser descoberta no PR do produtor, antes do merge, em qualquer par de times.</li>
+      <li><strong>Linguagem de risco com produto.</strong> O problema local era “o PM pressionou e subimos sem estorno testado”. A mudança de sistema é o campo de risco residual obrigatório no RC, com dono do aceite nomeado. A decisão deixa de depender da coragem de quem está no plantão.</li>
+      <li><strong>Plataforma de teste.</strong> O problema local era “staging disputado, um time sobrescreve o dado do outro”. A mudança de sistema é ambiente efêmero por PR com seed de massa versionado. Acaba a fila e acaba a categoria de flake por colisão de dado.</li>
+    </ol>
+    <p>Isso também muda como meu dia parece. Escrevo mais design doc e menos teste. Passo mais tempo em conversa com TL de times que não são o meu. Meço adoção, não entrega. Se uma prática que desenhei só funciona quando eu estou presente, ainda não é mudança de sistema. É dependência com outro nome.</p>
+    <p>E Staff não é o Sênior mais rápido em Page Object. Se o seu dia ainda é executar o que chega, o nível não sobe com mais horas. Sobe com escopo de decisão.</p>
+
+    <h2>Anti-padrões de quem quer subir</h2>
+    <ul>
+      <li><strong>Pedir o título antes do escopo.</strong> “Quero ser Staff” sem um problema de sistema em andamento vira conversa abstrata. Chegue com o problema e peça o espaço para resolvê-lo.</li>
+      <li><strong>Projeto vitrine.</strong> Montar um framework interno bonito que ninguém pediu e ninguém adota. Escopo grande, impacto zero.</li>
+      <li><strong>Esconder o não-testado para parecer forte.</strong> Quem nunca declara risco residual parece infalível até o primeiro incidente. Depois, perde a sala.</li>
+      <li><strong>Confundir visibilidade com influência.</strong> Postar muito no canal geral não é influência. Influência é alguém mudar como trabalha por causa do que você propôs.</li>
+      <li><strong>Mentoria de lista.</strong> Indicar curso e livro. Mentoria que conta é sentar junto na decisão difícil e deixar a pessoa conduzir a próxima.</li>
+      <li><strong>Brigar por QA no organograma.</strong> Gastar energia defendendo “o papel do QA” em vez de mostrar resultado que torna a defesa desnecessária.</li>
+    </ul>
+
+    <h2>O formato do parágrafo de portfólio</h2>
+    <p>Portfólio útil de QE não é lista de ferramentas nem lista de projetos. É uma coleção de casos, um parágrafo cada, sempre no mesmo formato: <strong>contexto, decisão, evidência, resultado</strong>. Quatro frases bastam.</p>
+    <p>Um exemplo completo:</p>
+    <blockquote>
+      <p><strong>Contexto:</strong> o squad de pagamentos tinha 9 incidentes de duplicidade de cobrança por trimestre, todos ligados a retry do PSP. <strong>Decisão:</strong> propus trocar 40 cenários E2E de pagamento por testes de idempotência no serviço com falha injetada no client HTTP, e exigir chave de idempotência no contrato com o gateway. <strong>Evidência:</strong> os testes novos reproduziram 7 dos 9 incidentes antigos em menos de um minuto de pipeline. <strong>Resultado:</strong> zero duplicidade em dois trimestres; a suíte de pagamento caiu de 18 para 4 minutos.</p>
+    </blockquote>
+    <p>Compare com “Implementei testes de pagamento com Cypress e melhorei a qualidade do checkout”. A primeira versão é verificável, mostra decisão e deixa o leitor ver o trade-off. A segunda é currículo.</p>
+    <p>Duas regras do formato. A decisão precisa ter uma alternativa que você descartou, explícita ou implícita; senão não foi decisão, foi tarefa. E o resultado precisa ser algo que o negócio ou o time sente, não algo que só você mede.</p>
+
+    <h2>Seis movimentos para os próximos noventa dias</h2>
+    <ol>
+      <li><strong>Escreva três decisões de risco</strong> que você influenciou nos últimos seis meses, no formato contexto, decisão, evidência, resultado. Se não achar três, esse é o diagnóstico.</li>
+      <li><strong>Escolha um buraco de sistema</strong> que causa dor em mais de um time (contrato, ambiente, flake, observabilidade) e feche com antes e depois medidos.</li>
+      <li><strong>Peça ao PE e ao TL uma frase cada:</strong> “onde minha leitura de risco ainda é fraca?”. Anote sem se defender.</li>
+      <li><strong>Troque uma métrica de volume por uma de resultado</strong> no seu 1:1. Saia de “cenários automatizados” para “escape por trimestre” ou “tempo até primeiro sinal”.</li>
+      <li><strong>Aprenda o caminho do dinheiro e o p95</strong> do fluxo principal do seu produto. Desenhe no papel. Mostre para um dev e peça correção.</li>
+      <li><strong>Abra um arquivo de evidência hoje.</strong> Uma linha por semana. Na próxima calibração, você chega com fatos, não com memória.</li>
     </ol>
 
-    <p>Nível sobe quando o produto fica mais seguro e o time mais rápido por causa da sua presença. O resto é currículo.</p>
+    <p>Nível sobe quando o produto fica mais seguro e o time mais rápido por causa da sua presença, e você consegue mostrar isso em quatro frases. O resto é currículo, e currículo só abre a porta.</p>
 
     <div class="article__foot">
       <a href="../index.html#artigos">← Voltar aos artigos</a>

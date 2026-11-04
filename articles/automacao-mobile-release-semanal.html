@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Release semanal no app: o que automatizar de verdade — Leandro Lima</title>
-  <meta name="description" content="Automação mobile para release semanal: matriz de devices realista, smoke vs profunda, farm, flake e riscos de loja e pagamento." />
+  <meta name="description" content="Automação mobile para release semanal com visão de risco: matriz de devices por telemetria (Tier A/B/C com política de saída), smoke versus profunda, taxonomia de flake mobile, farm versus nuvem com conta de custo, loja e pagamento fora do Appium e go/no-go que não é porcentagem de verde." />
   <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="article.css" />
   <link rel="stylesheet" href="../covers.css?v=11" />
@@ -23,63 +23,220 @@
     </div>
     <span class="article__tag">Mobile</span>
     <h1>Release semanal no app: o que automatizar de verdade</h1>
-    <p class="article__meta">Leitura ~16 min · Quality Engineering</p>
+    <p class="article__meta">Leitura ~18 min · Quality Engineering</p>
 
-    <p>Sexta, 16h. Binário na fila da loja. A farm ainda roda a suíte “completa”: duas horas, quinze por cento de falha intermitente, metade em device que quase ninguém usa. Alguém desliga o job para publicar. A automação não morreu por falta de Appium. Morreu por matriz irrealista e suíte que testa a farm em vez do produto.</p>
-    <p>Para release semanal a frase que uso: caminho feliz curto e duro nos riscos de loja e dinheiro. O resto é profunda fora do caminho crítico ou checklist consciente.</p>
+    <p>Quinta, 17h40. Versão 4.12 do app pronta para submeter. A suíte "completa" roda na farm há 1h50 e está em 78% de verde. Dos 41 vermelhos, 29 são em três devices que somam 1,1% das sessões, nove são o mesmo diálogo de permissão de notificação que ficou aberto depois de um reset, e três ninguém sabe. Alguém escreve no canal: "é flake, sempre foi". O binário sobe. Na segunda, o e-mail de campanha manda 380 mil pessoas para um link de PIX. No iOS, o link abre a home em vez da tela de pagamento, porque o arquivo de associação de domínio mudou num deploy do site. Conversão da campanha cai 31% no iOS. A suíte tinha 640 cenários. Nenhum abria um link de verdade num iPhone de verdade.</p>
+    <p>Não faltou Appium. Faltou critério: matriz escolhida por catálogo, suíte que testa mais a farm do que o produto, e uma decisão de publicação baseada em porcentagem. Para release semanal, a frase que eu uso é curta: <strong>caminho de dinheiro curto e duro em poucos devices certos, profundidade fora do caminho crítico, e ritual de loja tratado como ritual, não como teste</strong>.</p>
 
     <div class="callout">
-      <p>Se o vermelho mobile precisa de novela para interpretar, alguém está depurando device, permissão ou dado. Estabilize a plataforma de teste antes de adicionar cenário.</p>
+      <p>Uma suíte mobile que precisa de alguém para "interpretar" o vermelho já parou de ser gate. Virou opinião com relatório anexo.</p>
     </div>
 
-    <h2>Por que mobile dói mais no risco</h2>
-    <p>Impacto: review na loja, pagamento in-app, onboarding que trava retenção. Probabilidade: fragmentação de SO, permissão, push, deep link, build assinada. Detectabilidade: falha só em um fabricante com skin própria; o e2e web não vê.</p>
+    <h2>Vocabulário mínimo antes de cortar</h2>
+    <p>Vou usar alguns termos o tempo todo. Prefiro defini-los aqui do que deixar cada um imaginar o seu.</p>
+    <ul>
+      <li><strong>RC (release candidate):</strong> o binário assinado que, se nada der errado, vai para a loja. Não é o build do PR. É o artefato que o usuário vai instalar.</li>
+      <li><strong>Farm:</strong> conjunto de devices físicos ou emulados onde a automação roda. Pode ser uma rack própria com celulares em hubs USB ou um serviço de nuvem que aluga devices por minuto ou por slot.</li>
+      <li><strong>Slot paralelo:</strong> um device que você consegue usar ao mesmo tempo que os outros. Dez slots significa dez execuções simultâneas, não dez devices no catálogo.</li>
+      <li><strong>Smoke:</strong> conjunto pequeno de cenários que responde "o app abre, autentica e faz a coisa que paga as contas?". Roda em todo RC e bloqueia.</li>
+      <li><strong>Profunda (deep):</strong> cenários mais caros ou mais raros. Permissões, push, offline, tablet, upgrade de versão. Roda agendada e informa, raramente bloqueia o merge.</li>
+      <li><strong>Flake:</strong> teste que falha e passa sem mudança de código nem de ambiente. Medido como falhas que passam no rerun divididas pelo total de execuções.</li>
+      <li><strong>Deep link:</strong> URL que abre o app numa tela específica. No iOS o mecanismo é o Universal Link, que depende de um arquivo <code>apple-app-site-association</code> servido pelo seu domínio. No Android é o App Link, com <code>assetlinks.json</code>. Se o arquivo quebra, o link cai no navegador ou na home, e nenhum teste de UI que navega por botão percebe.</li>
+      <li><strong>Rollout escalonado:</strong> publicar para uma fração dos usuários e ampliar aos poucos. Na Play Store você escolhe a porcentagem. Na App Store o "phased release" sobe em sete dias (1%, 2%, 5%, 10%, 20%, 50%, 100%) e pode ser pausado.</li>
+      <li><strong>Crash-free sessions:</strong> porcentagem de sessões sem crash, medida pelo Crashlytics, Sentry ou equivalente. É o sinal de produção que mais conversa com a decisão de ampliar ou pausar rollout.</li>
+    </ul>
 
-    <h2>Matriz: telemetria, não catálogo</h2>
+    <h2>Risco I×P×D aplicado ao app</h2>
+    <p>Antes de discutir device ou ferramenta, eu pontuo os fluxos. Três notas de 1 a 5, multiplicadas:</p>
+    <ul>
+      <li><strong>Impacto (I):</strong> se quebrar, quanto dói? 5 é dinheiro, segurança ou bloqueio total de uso. 1 é cosmético.</li>
+      <li><strong>Probabilidade (P):</strong> qual a chance de quebrar nesta semana? Sobe quando o fluxo mudou, depende de SDK de terceiro, de permissão do SO ou de configuração fora do app.</li>
+      <li><strong>Detectabilidade (D):</strong> se quebrar, quão tarde descobrimos? 5 é "só o usuário vê, e depois de dias". 1 é "o crash aparece no primeiro minuto do rollout". Aqui nota alta é ruim.</li>
+    </ul>
+    <p>Exemplo real de um app de varejo com carteira, pontuado numa sexta à tarde com produto e engenharia:</p>
+    <ul>
+      <li>Login com biometria: I 5 × P 3 × D 3 = <strong>45</strong>.</li>
+      <li>Pagamento PIX dentro do app: I 5 × P 3 × D 4 = <strong>60</strong>. D alto porque a falha comum não é crash, é tela que não avança.</li>
+      <li>Deep link de campanha para PIX: I 4 × P 3 × D 5 = <strong>60</strong>. Depende de arquivo no domínio, muda sem PR do app, ninguém vê até a campanha sair.</li>
+      <li>Assinatura in-app (compra pela loja): I 5 × P 2 × D 5 = <strong>50</strong>.</li>
+      <li>Push de status de pedido: I 3 × P 3 × D 4 = <strong>36</strong>.</li>
+      <li>Upgrade da versão N-1 para N sem perder sessão: I 4 × P 2 × D 4 = <strong>32</strong>.</li>
+      <li>Layout em tablet: I 2 × P 3 × D 3 = <strong>18</strong>.</li>
+      <li>Editar foto de perfil: I 1 × P 2 × D 2 = <strong>4</strong>.</li>
+    </ul>
+    <p>Minha régua: <strong>40 ou mais</strong> precisa de evidência antes de submeter, seja smoke automatizado no Tier A, seja checagem com dono no ritual de publicação. <strong>De 20 a 39</strong> vai para a profunda noturna ou pré-RC. <strong>Abaixo de 20</strong> é exploratório e monitoramento de produção. Repare que dois dos quatro itens acima de 40 não se resolvem bem com Appium. Isso aparece mais adiante e é onde muita estratégia mobile erra.</p>
+
+    <h2>Matriz de devices por telemetria, com política de saída</h2>
+    <p>Matriz montada pelo catálogo do fornecedor ou pela lista "dos celulares que a gente tem na gaveta" testa o que está disponível, não o que o usuário usa. Eu monto pela telemetria de sessões dos últimos 28 dias, agrupando por família de modelo e versão maior do SO. Família porque Galaxy A54 e A55 se comportam quase igual; versão maior porque é ali que permissão, WebView e política de background mudam.</p>
+
+    <h3>Como cortar com número</h3>
+    <p>Ordene as combinações por sessões e some a cobertura acumulada. Exemplo de um app com 2,3 milhões de sessões por semana, 71% Android e 29% iOS:</p>
+    <ul>
+      <li>Samsung Galaxy A (Android 14): 18,4%</li>
+      <li>iPhone 13/14 (iOS 17): 14,9%</li>
+      <li>Motorola Moto G (Android 13): 11,2%</li>
+      <li>Samsung Galaxy A (Android 13): 8,7%</li>
+      <li>Xiaomi Redmi Note (Android 13, MIUI/HyperOS): 7,9%</li>
+      <li>iPhone 11 (iOS 16): 5,1%</li>
+      <li>Restante: cauda longa de mais de 600 combinações.</li>
+    </ul>
+    <p>As cinco primeiras somam 61,1%. Adicionando o iPhone 11 com iOS 16, que é o mínimo suportado no iOS, chegamos a 66,2% com seis perfis.</p>
+
+    <h3>Tiers</h3>
     <ol>
-      <li><strong>Tier A (bloqueia merge/RC):</strong> 2–4 perfis da massa real + SO mínimo suportado. Aqui roda smoke.</li>
-      <li><strong>Tier B (release/diário):</strong> mais alguns por market share e skins problemáticas conhecidas.</li>
-      <li><strong>Tier C (amostral):</strong> raro, beta, extremo. Fora do PR.</li>
+      <li><strong>Tier A (bloqueia RC):</strong> de 4 a 6 perfis. Os que somam entre 55% e 65% das sessões, mais o SO mínimo suportado de cada plataforma, mesmo que tenha pouca sessão. Mínimo suportado entra porque é onde API nova quebra primeiro. Smoke roda aqui, inteiro, em todo RC e em todo merge na branch de release.</li>
+      <li><strong>Tier B (diário e pré-RC):</strong> de 6 a 10 perfis a mais, até cerca de 85% acumulado. Inclui skins conhecidas por dor: fabricante que mata processo em background, que muda o comportamento de notificação, que tem teclado próprio. Roda a profunda toda noite e o smoke na véspera do RC.</li>
+      <li><strong>Tier C (amostral):</strong> cauda longa, OS beta, tela dobrável, device de 2 GB de RAM. Roda semanalmente em rodízio, três ou quatro por semana, sem bloquear nada. Serve para achar classe de problema, não para provar cobertura.</li>
     </ol>
-    <p>Entra na matriz com uso relevante, incidente histórico ou exigência de loja. Sai com uso irrelevante, zero incidente em 90 dias e custo alto. Matriz sem política de saída só engorda.</p>
-    <p>Android: mínimo suportado + N e N-1 costuma pagar mais que oito APIs finas. iOS: política de suporte da empresa, não todos os iPhones do museu.</p>
 
-    <h2>Smoke versus profunda</h2>
-    <p><strong>Smoke:</strong> instalar/abrir, login, jornada de dinheiro ou core, logout ou kill. Minutos, Tier A, todo RC.</p>
-    <p><strong>Profunda:</strong> permissões, push, deep link, tablet, offline. Agenda diária ou pré-release, não no caminho crítico do merge se o custo matar a cadência.</p>
+    <h3>Política de entrada e saída</h3>
+    <p>Matriz que só cresce vira imposto. A minha tem regra escrita, revisada numa reunião de 30 minutos no primeiro dia útil do mês:</p>
+    <ul>
+      <li><strong>Entra no Tier A</strong> se passar de 5% das sessões por dois meses seguidos, ou se for o novo mínimo suportado.</li>
+      <li><strong>Sobe de C para B</strong> se tiver incidente de produção atribuído a ele nos últimos 90 dias, independente da sessão.</li>
+      <li><strong>Desce de A para B</strong> se ficar abaixo de 3% por dois meses e não tiver incidente atribuído em 90 dias.</li>
+      <li><strong>Sai do Tier B</strong> abaixo de 1,5% sem incidente em 90 dias e com custo de manutenção alto (device que desconecta, bateria estufada, atualização de SO que não dá para travar).</li>
+      <li><strong>Sai do suporte</strong> é decisão de produto, não de QA. Mas eu levo o número: "iOS 15 tem 0,6% das sessões e custou 11 horas de ajuste de teste no trimestre".</li>
+    </ul>
+    <p>Sem regra de saída, em um ano o Tier A tem 14 devices, o smoke leva 40 minutos e alguém propõe "rodar só na sexta". A cadência semanal morre pela matriz, não pelo código.</p>
+
+    <h2>Smoke versus profunda, com corte de verdade</h2>
+    <p>O smoke tem orçamento, e orçamento se mede em relógio, não em número de cenários. O meu: <strong>no máximo 12 minutos de parede no Tier A</strong>, paralelizado por device, com no máximo 15 cenários. A profunda tem até 90 minutos e roda à noite no Tier B.</p>
+    <p>Por que 12 minutos? Porque é o tempo que um dev espera sem abrir outra tarefa. Acima de 20, o merge na branch de release vira fila, e fila em semana de release vira pressão para pular o gate.</p>
 
     <h3>Exemplo de corte</h3>
-    <p>Analytics mostra 68% em dois perfis Android e um iPhone. Smoke: esses três + API mínima suportada. Deep link de campanha e tablet vão para profunda noturna. O PR deixa de esperar skin de fabricante com 0,4% de uso.</p>
-
-    <h2>Estabilidade antes de cenário novo</h2>
+    <p>Partindo da pontuação I×P×D acima e de uma suíte de 640 cenários herdada:</p>
     <ul>
-      <li>Setup via deep link, API ou flag para chegar rápido no ponto; UI longa só quando a navegação é o risco.</li>
-      <li>Conta e dado isolados por run.</li>
-      <li>Timeout e retry explícitos; não esconder flake em “wait mágico”.</li>
-      <li>Orçamento de flake: acima do teto, congela cenário novo.</li>
+      <li><strong>Smoke (Tier A, todo RC, bloqueia):</strong> instalação limpa e primeira abertura; login com senha e com biometria simulada; busca e adição ao carrinho; PIX até a tela de QR gerado, com backend de sandbox; cartão salvo até a confirmação; abertura de deep link de PIX a partir de URL real; logout e kill do processo com retomada de sessão. São 11 cenários, 9 minutos e 40 segundos em seis devices em paralelo.</li>
+      <li><strong>Profunda (Tier B, noturna, informa):</strong> fluxos de permissão negada e concedida depois; push de status de pedido; modo offline e reconexão no carrinho; upgrade de N-1 para N com sessão viva; tablet e fonte grande; troca de idioma; 58 cenários de regressão de tela que mudaram nos últimos 90 dias. Total de 74 minutos.</li>
+      <li><strong>Saiu da automação:</strong> 212 cenários que validavam texto e layout de telas estáveis há mais de um ano e nunca pegaram bug. Viraram teste de snapshot de componente no build, que roda em 40 segundos sem device.</li>
+      <li><strong>Apagado:</strong> 180 cenários duplicados ou cobrindo regra de negócio que já tem teste de API. Teste de UI para validar cálculo de frete é pagar device para testar backend.</li>
     </ul>
-    <p>Flake mobile tem taxonomia própria: permissão negada no reset, teclado cobrindo botão, animação de splash, build não assinada no device errado, push sandbox. Classifique antes do rerun. Rerun treina o time a ignorar vermelho.</p>
+    <p>A regra que sustenta o corte: <strong>teste de UI mobile só prova o que só a UI mobile pode provar</strong>. Navegação, integração com SO, permissão, ciclo de vida do processo, renderização. Regra de negócio desce para API ou unidade.</p>
 
-    <h2>Farm própria, BrowserStack ou híbrido</h2>
-    <p>Própria: controle e custo fixo; manutenção come gente. Nuvem: elasticidade e device raro; custo variável e flakiness de rede. Híbrido comum: Tier A local ou dedicado; Tier C na nuvem. Decida com número: minutos até sinal × taxa de falso positivo × preço.</p>
-    <p>Se a nuvem entrega sinal em 8 minutos com 3% de falso positivo e a farm própria leva 40 minutos com fila, a “economia” da rack é ilusão. Inverso também: nuvem cara e instável para Tier A vira imposto em todo merge.</p>
+    <h3>Como chegar rápido no ponto</h3>
+    <p>Metade do tempo de um cenário mobile costuma ser navegação até a tela que importa. Se o risco é o pagamento, eu não clico em seis telas de onboarding toda vez. Uso deep link de teste, conta pré-criada por API e flag de feature ligada pelo backend. Navegação longa pela UI só quando a navegação é o risco, e aí ela é um cenário próprio, não pedágio de todos os outros.</p>
 
-    <h2>Loja, pagamento e o que o e2e não substitui</h2>
-    <p>Review de loja, receipt validation, sandbox de pagamento e deep link de campanha pedem checklist e ambiente certo, não só mais Appium. Automatize o que é regressão de app; trate o que é ritual de publicação como gate com dono. Misturar os dois no mesmo job deixa o vermelho ilegível.</p>
-
-    <h2>O que não cabe no semanal</h2>
-    <p>Cobrir todos os devices do analytics. Suíte de duas horas no PR. Cenário cujo custo de estabilizar passa o risco residual. Testar a loja inteira em todo commit.</p>
-
-    <h2>Antes do próximo release de sexta</h2>
+    <h2>Flake mobile tem taxonomia própria</h2>
+    <p>Flake em web costuma ser timing e dado. Em mobile tem mais camadas, e cada uma pede correção diferente. Rerun automático sem classificar treina o time a ignorar vermelho; em três semanas, ninguém lê o relatório. Eu classifico todo vermelho em uma destas sete categorias antes de qualquer rerun:</p>
     <ol>
-      <li>Corte a matriz Tier A pela telemetria real.</li>
-      <li>Separe smoke bloqueante da profunda agendada.</li>
-      <li>Meça flake sete dias; classifique causa.</li>
-      <li>Garanta um caminho de dinheiro estável no Tier A.</li>
-      <li>Escreva critério de go/no-go: não é “% verde”, é risco aceito com dono.</li>
+      <li><strong>Estado do device:</strong> diálogo de permissão que sobrou do run anterior, teclado cobrindo o botão, idioma ou fuso diferente, armazenamento baixo, modo economia de bateria ligado. Sinal: falha só em um device e some depois de reset. Correção: reset determinístico no início do run, permissões concedidas via comando (<code>adb shell pm grant</code>, <code>simctl privacy</code>) e checagem de pré-condição que falha com mensagem clara.</li>
+      <li><strong>Animação e transição:</strong> splash com animação, Lottie, transição de tela. O elemento existe mas não aceita toque ainda. Sinal: <em>element not interactable</em> intermitente. Correção: desligar animações no build de teste e esperar por estado (botão habilitado), não por tempo.</li>
+      <li><strong>Infraestrutura da farm:</strong> device desconecta do USB, <code>adb</code> fica offline, WebDriverAgent cai no iOS, device esquenta e o SO reduz performance. Sinal: falha em cenários aleatórios no mesmo device, no mesmo horário. Correção: health check do device antes de alocar, tirar device doente do pool automaticamente, e não contar isso como falha do produto.</li>
+      <li><strong>Backend e sandbox de terceiro:</strong> sandbox de pagamento lento, push sandbox do APNs que atrasa, OTP por SMS que não chega. Sinal: falha agrupada por horário e não por device. Correção: mock controlado no smoke, terceiro real só na profunda e com timeout próprio.</li>
+      <li><strong>Dado:</strong> conta compartilhada entre runs paralelos, carrinho com item de outro teste, cupom já usado. Sinal: falha some quando roda sozinho. Correção: conta e dado isolados por execução, criados por API.</li>
+      <li><strong>O próprio teste:</strong> localizador por XPath com índice, espera fixa de três segundos, asserção em texto que muda com A/B. Correção: <code>accessibilityIdentifier</code> e <code>resource-id</code> estáveis, combinados com o time de app como parte do contrato da tela.</li>
+      <li><strong>Bug real intermitente:</strong> condição de corrida no app, crash sob memória baixa. É o mais valioso e o que mais se perde no meio dos outros seis. Se você não classifica, é exatamente este que vai para "é flake, sempre foi".</li>
+    </ol>
+    <p><strong>Orçamento de flake:</strong> no smoke, teto de 2% por cenário em janela de sete dias. Exemplo: cenário rodou 150 vezes na semana, falhou 6 e passou no rerun sem mudança. 6/150 = 4%. Passou do teto, vai para quarentena com dono e prazo de cinco dias úteis. Quarentena significa que roda e reporta, mas não bloqueia. Se o cenário tem pontuação de risco 40 ou mais, a quarentena não pode simplesmente tirá-lo do gate: alguém faz a checagem manual no RC até ele voltar. Se a suíte inteira passa de 5% de flake, congelo cenário novo até baixar. Adicionar cobertura em cima de base instável só aumenta o ruído.</p>
+
+    <h2>Farm própria, nuvem ou híbrido: a conta</h2>
+    <p>Essa discussão costuma ser ideológica. Eu prefiro fazer a conta com quatro números: custo mensal, minutos até o sinal, taxa de falso positivo e custo de cada falso positivo. Os valores abaixo são de um cenário que montei para uma decisão real, arredondados.</p>
+
+    <h3>Demanda</h3>
+    <p>40 merges por dia na branch principal com smoke em 6 devices, 10 minutos cada: 40 × 6 × 10 = <strong>2.400 minutos-device por dia</strong>. Profunda noturna em 10 devices, 75 minutos: 750 minutos-device. Total perto de 3.150 minutos-device por dia útil. O pico está concentrado entre 10h e 18h, então o que importa é paralelismo naquele horário, não o total.</p>
+
+    <h3>Farm própria</h3>
+    <ul>
+      <li>16 devices a R$ 2.800 em média: R$ 44.800, depreciados em 24 meses = R$ 1.870 por mês.</li>
+      <li>Hosts, hubs, rede, reposição de bateria e device quebrado: cerca de R$ 1.200 por mês.</li>
+      <li>Meia pessoa de engenharia mantendo a rack, atualizando SO, trocando cabo, depurando WebDriverAgent: R$ 10.000 por mês de custo carregado.</li>
+      <li>Total: <strong>cerca de R$ 13.000 por mês</strong>. Latência baixa, controle total, mas o Tier C fica pobre porque ninguém compra 30 devices raros.</li>
+    </ul>
+
+    <h3>Nuvem</h3>
+    <ul>
+      <li>Suponha R$ 1.400 por slot paralelo por mês num plano de devices reais. Para segurar o pico das 14h sem fila, preciso de 12 slots: <strong>R$ 16.800 por mês</strong>.</li>
+      <li>Catálogo enorme, Tier C barato. Mas a latência de rede entre o runner e o device adiciona tempo por comando e mais falha de infraestrutura.</li>
+    </ul>
+
+    <h3>O número que quase ninguém coloca: falso positivo</h3>
+    <p>Cada vermelho falso custa triagem. Medi uma média de 18 minutos de um dev por falso vermelho, entre olhar log, vídeo e rerodar. Com 240 execuções de smoke por dia:</p>
+    <ul>
+      <li>Falso positivo de 2%: 4,8 vermelhos falsos por dia × 18 min = 86 minutos de engenharia por dia, cerca de 31 horas por mês.</li>
+      <li>Falso positivo de 7%: 16,8 por dia × 18 min = 302 minutos por dia, cerca de 110 horas por mês.</li>
+    </ul>
+    <p>A R$ 120 a hora carregada, a diferença entre 2% e 7% é de <strong>quase R$ 9.500 por mês</strong>. Maior que a diferença de preço entre farm e nuvem. E isso sem contar o custo invisível: o time que aprende a ignorar vermelho.</p>
+
+    <h3>O que eu escolhi naquele caso</h3>
+    <p>Híbrido. Tier A numa rack própria pequena, seis devices fixos com SO travado, perto do runner de CI, porque ali latência e estabilidade pesam em todo merge. Tier B e C na nuvem, porque profunda noturna tolera latência e o catálogo largo vale mais que o controle. A rack pequena custa perto de R$ 5.500 por mês com um quinto de pessoa; a nuvem com 5 slots, R$ 7.000. Total de R$ 12.500, um pouco abaixo das duas opções puras, com falso positivo do smoke abaixo de 2% e Tier C de verdade. Se o seu falso positivo na nuvem for baixo e a latência aceitável, a conta pode virar. O ponto é fazer a conta, não defender rack ou fornecedor.</p>
+
+    <h2>Loja, pagamento e deep link: o que o Appium não substitui</h2>
+    <p>Lembra dos itens acima de 40 que não se resolvem bem com Appium? Aqui eles voltam. Misturar ritual de publicação com teste de regressão no mesmo job deixa o vermelho ilegível e o verde mentiroso.</p>
+
+    <h3>Deep link</h3>
+    <p>O teste de UI que abre o link é necessário, mas é o último elo. Antes dele, o que quebra de verdade é configuração fora do app: o <code>apple-app-site-association</code> ou o <code>assetlinks.json</code> servidos com o content-type errado, atrás de redirect, sem o path novo, ou com o fingerprint do certificado antigo depois de uma troca de chave. Eu coloco uma checagem HTTP desses arquivos no pipeline do site e no pipeline do app: baixa o arquivo do domínio de produção, valida que o app ID e os paths esperados estão lá. Leva dois segundos. No incidente da abertura, teria quebrado o deploy do site, não a campanha.</p>
+    <p>No device, um cenário por plataforma abre a URL real pelo navegador do sistema, não por comando interno de intent, e confere que caiu na tela certa. Comando interno pula exatamente a verificação de domínio que falhou.</p>
+
+    <h3>Pagamento in-app e assinatura</h3>
+    <p>Compra pela loja tem três partes: a UI do app, a folha de pagamento do sistema e a validação do recibo no seu backend. A folha do sistema não é sua e muda sem aviso. Eu divido assim:</p>
+    <ul>
+      <li><strong>UI do app até chamar a compra:</strong> automação normal.</li>
+      <li><strong>Folha da loja:</strong> no iOS, StoreKit Testing com arquivo de configuração local no build de teste. No Android, contas de teste de licença no Play Billing. Um cenário de compra e um de cancelamento na profunda, não no smoke, porque dependem de ambiente que oscila.</li>
+      <li><strong>Validação de recibo e notificações de servidor:</strong> teste de API no backend com recibos de sandbox gravados, incluindo renovação, reembolso e assinatura expirada. É onde o dinheiro de fato se perde, e não precisa de device nenhum.</li>
+    </ul>
+
+    <h3>Revisão da loja</h3>
+    <p>Rejeição na revisão não é bug de regressão. É ritual com checklist e dono: permissões declaradas batem com o uso, texto de privacidade atualizado, conta de demonstração funcionando para o revisor, nenhum link para pagamento externo onde a política proíbe. Eu mantenho esse checklist como item do go/no-go, com o nome de quem confirmou. Automatizar isso com Appium seria teatro.</p>
+
+    <h2>Go/no-go não é porcentagem de verde</h2>
+    <p>"Estamos com 94% de verde" não diz nada. Depende do que são os 6%. Vi release com 94% bloquear corretamente porque o vermelho era o PIX no Galaxy A com Android 14, que é 18% das sessões. E vi release com 82% sair corretamente porque os vermelhos eram layout de tablet em Tier C e um cenário em quarentena com checagem manual feita.</p>
+    <p>Meu critério de go/no-go para o RC semanal, escrito e assinado por QA, engenharia e produto:</p>
+    <ol>
+      <li><strong>Smoke do Tier A 100% verde</strong> no binário assinado do RC, não no build do PR.</li>
+      <li><strong>Nenhum fluxo com risco 40 ou mais sem evidência.</strong> Se o cenário está em quarentena, a checagem manual foi feita e registrada com nome.</li>
+      <li><strong>Vermelhos da profunda classificados.</strong> Cada um tem categoria da taxonomia e dono. Bug real com risco abaixo de 40 pode sair com ticket e decisão explícita de produto.</li>
+      <li><strong>Checklist de loja confirmado</strong>, incluindo a checagem dos arquivos de deep link em produção.</li>
+      <li><strong>Plano de contenção pronto:</strong> rollout começa em 1% na Play e phased release na App Store; flag de servidor para desligar a feature nova; critério de pausa escrito. O meu: pausar se crash-free sessions da versão nova cair abaixo de 99,5% ou ficar 0,3 ponto abaixo da versão anterior depois de 2 mil sessões, ou se a conversão do fluxo de pagamento cair mais de 5% em relação à versão anterior no mesmo horário.</li>
+    </ol>
+    <p>O item 5 é o que muita gente esquece. Mobile não tem rollback: o binário instalado fica no celular. O que você tem é rollout escalonado, flag de servidor e a próxima versão. A automação reduz a chance de precisar disso, mas o go só é responsável se o plano de contenção existe antes do submit.</p>
+
+    <h2>O que não cabe no release semanal</h2>
+    <p>Algumas coisas são importantes e mesmo assim não pertencem ao caminho crítico de uma cadência de sete dias. Tirar daqui não é abandonar. É dar outro relógio.</p>
+    <ul>
+      <li><strong>Matriz inteira do analytics:</strong> as 600 combinações da cauda longa não cabem em gate nenhum. Cabem em amostragem do Tier C e em monitoramento de crash por modelo.</li>
+      <li><strong>Beta de SO novo:</strong> roda em rodízio mensal a partir do primeiro beta público, com relatório para o time de app. Não bloqueia RC até a versão final sair.</li>
+      <li><strong>Auditoria completa de acessibilidade:</strong> trimestral, com especialista e leitor de tela. No semanal, só checagem automatizada de contraste e rótulo nos componentes novos.</li>
+      <li><strong>Performance de cold start e consumo de bateria em profundidade:</strong> medição semanal fixa em dois devices de referência, com tendência. Profiling completo por release mata a cadência.</li>
+      <li><strong>Upgrade de versões muito antigas:</strong> N-1 para N está na profunda. N-6 para N entra só quando há migração de banco local ou mudança de autenticação.</li>
+      <li><strong>Testar loja inteira em todo commit:</strong> compra in-app real em cada merge custa caro, oscila e não acrescenta sinal sobre o código do PR.</li>
+    </ul>
+
+    <h2>Anti-padrões que eu vejo em quase toda farm</h2>
+    <ul>
+      <li>Matriz escolhida por catálogo do fornecedor, sem telemetria e sem regra de saída.</li>
+      <li>Suíte de duas horas no PR, que logo vira "roda só na sexta" e depois "roda quando der".</li>
+      <li>Rerun automático de três tentativas sem classificação. O bug intermitente real desaparece na estatística.</li>
+      <li>Teste de UI validando regra de negócio que tem dono no backend.</li>
+      <li>Deep link testado por comando interno do driver, pulando a verificação de domínio.</li>
+      <li>Smoke rodando no build de debug e o RC assinado nunca tocando um device antes do submit.</li>
+      <li>Go/no-go por porcentagem e sem plano de contenção, como se mobile tivesse rollback.</li>
+      <li>Rack própria sem ninguém com tempo alocado para mantê-la. Em seis meses ela é a maior fonte de flake do time.</li>
+    </ul>
+
+    <h2>O ritual da semana, dia a dia</h2>
+    <p>Cadência semanal precisa de relógio fixo. Este é o que eu uso quando o submit é na quinta:</p>
+    <ol>
+      <li><strong>Segunda:</strong> revisão de 20 minutos da pontuação I×P×D das mudanças da semana. Fluxo novo ou alterado com 40 ou mais ganha cenário de smoke ou checagem com dono no RC.</li>
+      <li><strong>Terça, 18h:</strong> corte da branch de release. Profunda completa no Tier B durante a noite.</li>
+      <li><strong>Quarta, 10h:</strong> triagem de 30 minutos dos vermelhos da profunda, classificados pela taxonomia. Bug real vira ticket com prioridade; flake vai para quarentena com prazo.</li>
+      <li><strong>Quinta, 11h:</strong> RC assinado. Smoke no Tier A sobre o binário final. Checagem dos arquivos de deep link em produção e checklist de loja.</li>
+      <li><strong>Quinta, 14h:</strong> go/no-go de 15 minutos com os cinco critérios. Submit com rollout inicial e critério de pausa escrito no próprio ticket do release.</li>
+      <li><strong>Sexta a terça:</strong> acompanhamento de crash-free e conversão por versão. Ampliação ou pausa do rollout por dado, não por calendário.</li>
+      <li><strong>Primeiro dia útil do mês:</strong> 30 minutos de revisão da matriz com a regra de entrada e saída.</li>
     </ol>
 
-    <p>Release semanal sobrevive a suíte crível. Não a inventário de devices para impressionar slide.</p>
+    <h2>Seis cortes para o próximo RC</h2>
+    <ol>
+      <li>Exporte 28 dias de sessões por família de modelo e versão maior de SO, e defina o Tier A como os perfis até 60% de cobertura mais o SO mínimo suportado.</li>
+      <li>Pontue os dez fluxos principais com I×P×D com produto na sala. Tudo que passar de 40 precisa de evidência no RC.</li>
+      <li>Corte o smoke para caber em 12 minutos. O que sobrar vai para a profunda, para teste de componente ou para a lixeira.</li>
+      <li>Classifique todos os vermelhos de uma semana nas sete categorias de flake antes de qualquer rerun. Desligue o rerun automático no smoke.</li>
+      <li>Adicione a checagem HTTP dos arquivos de deep link no pipeline do site e do app.</li>
+      <li>Escreva o critério de pausa do rollout e coloque no ticket do próximo release antes do submit.</li>
+    </ol>
+
+    <p>Release semanal não sobrevive a inventário de devices. Sobrevive a poucos sinais confiáveis nos lugares onde o dinheiro passa, e a uma decisão de publicação que alguém consegue defender na segunda de manhã, com a campanha no ar.</p>
 
     <div class="article__foot">
       <a href="../index.html#artigos">← Voltar aos artigos</a>

@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Ambiente de teste caro demais: o que vale a pena — Leandro Lima</title>
-  <meta name="description" content="Farm, ambiente efêmero e prod-like: custo versus confiança, quando clonar produção mente, e como estratificar fidelidade por risco." />
+  <meta name="description" content="Farm, ambiente efêmero e pré-prod com visão de risco: três camadas de fidelidade, onde o prod-like mente (banco subdimensionado), conta de custo × flake × sinal, dados e PII, dono e fila, e como declarar o que cada ambiente prova." />
   <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="article.css" />
   <link rel="stylesheet" href="../covers.css?v=11" />
@@ -23,54 +23,192 @@
     </div>
     <span class="article__tag">Plataforma</span>
     <h1>Ambiente de teste caro demais: o que vale a pena</h1>
-    <p class="article__meta">Leitura ~15 min · Quality Engineering</p>
+    <p class="article__meta">Leitura ~18 min · Quality Engineering</p>
 
-    <p>O time pede “staging igual produção”. Sobe um clone caro, banco menor, fila compartilhada, três squads brigando pelo mesmo namespace. Setup de uma hora para validar um rename. No fim do mês a cloud doa; a confiança no sinal, não.</p>
-    <p>Ambiente de teste é investimento com retorno em velocidade e verdade. Sem estratificar fidelidade por risco, vira teatro prod-like.</p>
+    <p>Quinta, 16h40. Três squads querem o staging ao mesmo tempo. O time de pagamentos está no meio de um e2e de 25 minutos quando o time de catálogo faz deploy de uma branch que muda o schema de produto. O e2e de pagamentos quebra. Alguém abre incidente no canal de QA: "staging instável de novo". A fatura da cloud do mês anterior chegou na mesma tarde: R$ 38 mil só em ambientes não produtivos. No retro do trimestre, dois bugs de contrato entre serviços chegaram em produção. Nenhum dos dois precisava de um clone de produção para ser pego. Precisava de um teste de contrato num ambiente que sobe com o PR e morre depois.</p>
+    <p>Esse é o padrão que mais encontro: muito dinheiro em fidelidade genérica, pouco sinal útil e nenhuma frase escrita sobre o que cada ambiente prova. O time paga caro por um "igual produção" que não é igual nos pontos que importam, e paga com tempo de gente a fila e o flake que esse ambiente gera.</p>
+    <p>Neste texto eu destrincho como decido onde gastar fidelidade, com conta na mão. Antes do jargão, a definição.</p>
 
     <div class="callout">
-      <p>Prod-like sem dizer o que prova é marketing interno. Diga: este ambiente prova regressão de código, não capacidade de Black.</p>
+      <p>Ambiente que não declara o que prova acaba provando o que o gerente quer ouvir.</p>
     </div>
 
-    <h2>Três camadas que uso</h2>
-    <ol>
-      <li><strong>Efêmero por PR:</strong> sobe, testa, morre. Barato, isolado, ótimo para smoke e contrato. Fidelidade parcial consciente.</li>
-      <li><strong>Integrado compartilhado:</strong> para fluxos que precisam de vários serviços. Precisa de dono, fila de uso e higiene de dado. Senão vira faroeste.</li>
-      <li><strong>Pré-prod / campanha:</strong> mais perto de prod nos limites que importam. Caro. Reserva para release maior, perf e dados sensíveis de volume.</li>
-    </ol>
+    <h2>Três palavras antes de começar</h2>
+    <p><strong>Fidelidade</strong> é o quanto um ambiente se comporta como produção <em>no aspecto que o teste quer observar</em>. Não é uma nota única. Um ambiente pode ter fidelidade alta de código (mesma imagem, mesma config) e fidelidade baixíssima de dado (mil linhas em vez de oitenta milhões). Quem diz "nosso staging é 90% prod" está somando coisas que não se somam.</p>
+    <p><strong>Ambiente efêmero</strong> é um ambiente criado automaticamente para uma mudança específica (geralmente um PR), usado pelos testes daquela mudança e destruído no fim. Vive minutos ou horas. Ninguém mais escreve nele.</p>
+    <p><strong>Farm</strong> é o conjunto de máquinas que executa testes: agentes de CI, browsers, devices reais ou emulados. Pode ser própria (você mantém) ou de nuvem (você aluga por minuto). A farm não é o ambiente sob teste; é quem dispara o teste contra ele. Confundir os dois gera conta errada: muita gente culpa o staging por um timeout que era agente de CI sem memória.</p>
 
-    <h2>Farm: device, browser, agente</h2>
-    <p>Farm própria ou nuvem: a pergunta é minutos até sinal × flake × preço. Prioridade por risco: main/release acima de PR; smoke acima de full. Idle eterno é desperdício; fila eterna é desperdício de gente.</p>
-
-    <h2>Onde o “igual prod” mente</h2>
+    <h2>Visão de risco: por que isso é problema de QE e não só de plataforma</h2>
+    <p>Uso a mesma lente que aplico em release: impacto, probabilidade e detectabilidade. Multiplico mentalmente as três para saber onde investir.</p>
     <ul>
-      <li>Banco com fração do volume: query rápida demais, ruptura real não aparece.</li>
-      <li>Sem o mesmo autoscaling, cache ou rate limit de terceiro.</li>
-      <li>Dump de produção no teste: risco legal e flakiness.</li>
-      <li>Clone completo para validar CSS: setup de uma hora, sinal fraco.</li>
+      <li><strong>Impacto (I):</strong> o que acontece quando o ambiente erra. Se ele dá falso verde, o bug vai para produção. Se dá falso vermelho, o time perde horas investigando flake e aprende a ignorar o pipeline. O segundo é mais traiçoeiro: corrói a confiança em todo o sinal, inclusive no verdadeiro.</li>
+      <li><strong>Probabilidade (P):</strong> sobe quando o ambiente é compartilhado sem dono, quando o dado é mutável por qualquer um, quando a config diverge de prod sem registro e quando o volume de dado é ordem de grandeza menor.</li>
+      <li><strong>Detectabilidade (D):</strong> aqui mora o perigo. Um ambiente que mente sobre capacidade não avisa que está mentindo. O relatório sai verde, com gráfico bonito. Você só descobre na data de pico. Detectabilidade baixa transforma um risco médio em risco alto.</li>
+    </ul>
+    <p>Na prática, eu pontuo de 1 a 5 cada eixo, com D invertido (5 = quase impossível perceber). Um staging compartilhado sem dono usado como prova de capacidade costuma sair algo como I=5, P=4, D=5: 100 de 125. Um efêmero por PR rodando smoke e contrato fica perto de I=3, P=2, D=2: 12. A conta não é ciência exata. Ela serve para parar a discussão de "precisamos de mais staging" e começar a de "qual risco este ambiente reduz".</p>
+
+    <h2>Três camadas de fidelidade</h2>
+    <p>Eu não desenho ambientes por time nem por serviço. Desenho por <strong>pergunta que o ambiente responde</strong>. Três camadas cobrem quase tudo que vi em empresa de produto.</p>
+
+    <h3>Camada 1: efêmero por PR</h3>
+    <p><strong>Pergunta que responde:</strong> esta mudança quebra o próprio serviço ou o contrato com os vizinhos?</p>
+    <p>Sobe a imagem da branch, dependências diretas em versão fixa ou simuladas, banco vazio com migrate e seed. Roda unidade de integração, contrato e smoke da jornada do serviço. Morre quando o PR fecha ou depois de algumas horas sem uso.</p>
+    <p><strong>Fidelidade consciente:</strong> alta de código e config, baixa de dado e de topologia. Não prova performance, não prova integração com terceiro real, não prova comportamento com volume.</p>
+    <p><strong>Custo típico que já medi:</strong> R$ 0,80 a R$ 3 por PR em cluster compartilhado com namespace isolado, subindo em 4 a 8 minutos. Com 600 PRs por mês, algo entre R$ 500 e R$ 1.800. É a camada mais barata por sinal útil.</p>
+
+    <h3>Camada 2: integrado compartilhado</h3>
+    <p><strong>Pergunta que responde:</strong> a jornada de ponta a ponta funciona com os serviços nas versões candidatas, juntos?</p>
+    <p>Todos os serviços da jornada sobem juntos, com dado de teste persistente e alguns terceiros em sandbox. É o "staging" clássico. Útil para e2e de jornada, testes exploratórios de produto e demonstração para negócio.</p>
+    <p><strong>Fidelidade consciente:</strong> média de topologia, média de dado, baixa de volume e de carga. Não prova capacidade. Prova que as peças conversam.</p>
+    <p><strong>O preço escondido:</strong> esse ambiente é um recurso disputado. Sem fila, dono e higiene, ele vira o lugar onde três times se atrapalham. O custo de cloud costuma ser o menor dos custos; o maior é hora de engenheiro esperando ou investigando falha que não é dele.</p>
+
+    <h3>Camada 3: pré-prod de campanha</h3>
+    <p><strong>Pergunta que responde:</strong> o sistema aguenta a premissa de tráfego e volume do evento que importa, nos limites que importam?</p>
+    <p>Sobe sob demanda, perto de release grande, teste de capacidade, migração de dado pesada ou mudança de infraestrutura. Banco com volume e distribuição parecidos com prod, mesma política de autoscaling, mesmos limites de conexão, cache começando frio.</p>
+    <p><strong>Fidelidade consciente:</strong> alta nos limites que você declarou (banco, pool, scale, rate limit). Pode ser baixa em coisas irrelevantes para a pergunta, como o painel administrativo.</p>
+    <p><strong>Custo:</strong> caro. Já vi de R$ 8 mil a R$ 40 mil por campanha de uma semana, dependendo do tamanho do banco. Por isso ele não fica ligado o ano inteiro. Liga, prova, desliga.</p>
+    <p>O erro mais comum é tentar fazer a camada 2 responder a pergunta da camada 3. Fica caro demais para ser efêmero e mentiroso demais para provar capacidade.</p>
+
+    <h2>Onde o "igual produção" mente</h2>
+    <p>Todo ambiente mente em algum lugar. O problema é quando ninguém sabe onde. Estes são os pontos em que mais vi relatório verde virar incidente.</p>
+
+    <h3>Banco subdimensionado: a mentira mais cara</h3>
+    <p>App com a mesma imagem, mesma rede, mesmo número de réplicas. Banco com 5% do volume de prod porque "dump completo é caro". Parece detalhe. Não é.</p>
+    <p>Com pouco dado, o índice inteiro cabe na memória do banco. A query que em prod faz leitura de disco aqui responde do cache. Uma tabela de pedidos com 400 mil linhas em vez de 80 milhões não mostra o plano de execução que muda quando a estatística muda. Lock quase não disputa porque há poucos registros quentes. Vacuum, autovacuum e manutenção de índice não pesam.</p>
+    <p><strong>Exemplo 1.</strong> Um time de marketplace rodou teste de carga no staging: p95 do checkout em 420 ms com 1.200 requisições por minuto. Relatório verde. Em produção, com o mesmo código e o dobro dessa carga numa data de campanha, o p95 foi para 3,8 s. A causa: uma query de cálculo de frete que fazia varredura sequencial numa tabela de 60 milhões de linhas em prod, e de 300 mil no staging. No staging, a varredura levava 40 ms. Em prod, 2,1 s. O teste não estava errado. O ambiente estava respondendo outra pergunta.</p>
+    <p>Regra que aplico: se o banco tem menos de um terço do volume de prod nas tabelas da jornada sob teste, o relatório não pode usar a palavra "capacidade". Pode dizer "não regredimos o código sob carga X neste dataset". São frases diferentes, e só a segunda é verdadeira.</p>
+
+    <h3>Autoscaling, cache e limites diferentes</h3>
+    <p>Staging com réplicas fixas enquanto prod escala por CPU. Cache que nunca esfria porque ninguém reinicia o staging. Pool de conexões configurado com 200 no staging e 50 em prod porque alguém aumentou para "resolver flake". Cada divergência dessas muda o ponto de ruptura.</p>
+    <p><strong>Exemplo 2.</strong> Pool de banco com 200 conexões no staging, 60 em prod. O teste de carga passou porque havia folga. Em prod, sob o mesmo volume, as requisições ficaram esperando conexão e o p95 dobrou. Ninguém tinha registrado a diferença. Desde então eu exijo um arquivo de divergências por ambiente, versionado junto com a infraestrutura.</p>
+
+    <h3>Terceiros simulados demais ou reais demais</h3>
+    <p>Sandbox de gateway de pagamento que responde em 30 ms sempre, sem rate limit. Em prod o mesmo gateway responde em 300 ms no p95 e corta você em 100 requisições por segundo. Do outro lado, o erro inverso: staging chamando o terceiro real, pagando por chamada e herdando a instabilidade dele como flake seu.</p>
+    <p>A decisão certa depende da camada. No efêmero, simule com contrato versionado. No integrado, sandbox do fornecedor com latência injetada quando a jornada depende do tempo de resposta. Na campanha, sandbox com o rate limit real configurado, ou simulador que reproduz o limite.</p>
+
+    <h3>Clone completo para validar uma mudança pequena</h3>
+    <p>O inverso da mentira: honesto demais para a pergunta. Subir 14 serviços e um banco de 200 GB para validar um ajuste de CSS. Setup de uma hora, sinal que um teste de componente daria em 40 segundos. Isso não é rigor. É custo sem retorno, e ensina o time a pular o ambiente quando tem pressa.</p>
+
+    <h2>Farm: a conta de custo, flake e sinal</h2>
+    <p>Antes de discutir farm própria versus nuvem, eu faço uma conta simples. A pergunta é: <strong>quanto custa cada sinal confiável que a farm me entrega?</strong></p>
+    <p>Três números entram:</p>
+    <ul>
+      <li><strong>Custo de execução:</strong> minutos de agente vezes preço por minuto.</li>
+      <li><strong>Taxa de flake:</strong> proporção de execuções que falham sem bug real e passam no retry.</li>
+      <li><strong>Custo de investigação:</strong> tempo de engenheiro olhando uma falha que não era bug, vezes o custo da hora.</li>
     </ul>
 
-    <h2>Custo versus confiança</h2>
-    <p>Calcule em voz alta: quanto custa o ambiente por mês e quantos escapes ele evitou. Se só gera fila e flake, corte fidelidade e isole. Se escapes caros passam, invista na camada certa, não em mais uma cópia genérica.</p>
-    <p>Exemplo: staging integrado a R$ X/mês, três squads, fila de 40 minutos, dois escapes de contrato no trimestre que um efêmero + Pact teriam pego. O dinheiro está no lugar errado. Mova fidelidade para onde o risco mora.</p>
+    <p><strong>Exemplo 3, com conta.</strong> Suíte e2e de navegador com 300 testes, 22 minutos por execução em paralelo, 40 execuções por dia útil.</p>
+    <ul>
+      <li>Farm de nuvem a R$ 0,06 por minuto de navegador. Cada execução usa 300 testes × média de 1,5 min = 450 minutos de navegador. R$ 27 por execução. 40 × 22 dias úteis = 880 execuções. <strong>R$ 23.760 por mês.</strong></li>
+      <li>Taxa de flake: 6% das execuções falham sem bug. São 53 falhas falsas por mês.</li>
+      <li>Cada falha falsa consome em média 25 minutos de alguém para investigar e rodar de novo. 53 × 25 min ≈ 22 horas. A R$ 150 a hora carregada, <strong>R$ 3.300 por mês</strong> em investigação inútil, mais o retry que dobra o custo de execução daquelas 53.</li>
+    </ul>
+    <p>Até aqui parece que o problema é o preço da farm. Agora o dado que muda a decisão: dessas 880 execuções, quantas pegaram bug real? No caso que analisei, 14 no mês. <strong>R$ 27 mil para 14 sinais, perto de R$ 1.930 por bug pego.</strong> E 11 dos 14 seriam pegos por teste de contrato ou de componente rodando em efêmero, por centavos.</p>
+    <p>A decisão não foi trocar de fornecedor. Foi cortar a suíte e2e para as 40 jornadas de receita, rodar em main e release em vez de todo PR, e mover o resto para camadas mais baratas. A conta caiu para algo perto de R$ 4 mil por mês, o flake caiu para 2% porque os testes restantes receberam atenção, e os escapes no trimestre seguinte não aumentaram.</p>
 
-    <h2>Dados e migrate</h2>
-    <p>Seed versionado. Migrate from empty + fixtures quando o schema é o risco. Snapshot quando a velocidade importa e o volume não é a hipótese. Nunca misture PII real sem política.</p>
-    <p>Ambiente efêmero sem seed reproduzível vira loteria. Compartilhado sem limpeza vira arqueologia. Os dois matam confiança mais rápido que “menos CPU”.</p>
+    <h3>Própria ou nuvem</h3>
+    <p>Farm própria compensa quando o volume é alto e estável, quando você precisa de device físico específico (um modelo de maquininha, um Android antigo que metade da base usa) ou quando política de dado impede sair da rede. Nuvem compensa quando o volume oscila, quando a matriz de browser e device é larga e quando ninguém do time quer ser dono de hardware. O erro é decidir pelo preço por minuto sem olhar fila e flake. Farm própria barata com fila de 40 minutos custa mais caro que nuvem em hora de gente esperando.</p>
 
-    <h2>Fila, dono, higiene</h2>
-    <p>Staging sem calendário é faroeste: deploy no meio do e2e do outro time, dado sujo, blame errado. Nomeie dono. Publique janela. Automatize reset. Sem isso, qualquer farm ou cluster só amplifica o caos.</p>
+    <h3>Prioridade na fila</h3>
+    <p>Quando a farm satura, alguém espera. Decida quem antes que a briga aconteça: release acima de main, main acima de PR, smoke acima de suíte completa. Agente ocioso eterno é dinheiro parado. Fila eterna é gente parada, que custa mais.</p>
 
-    <h2>Decisões baratas nesta quinzena</h2>
+    <h2>Dados, migrate e PII</h2>
+    <p>Ambiente sem dado reproduzível é loteria. Ambiente com dado de produção sem política é passivo jurídico. Entre os dois, há opções.</p>
+
+    <h3>Seed versionado</h3>
+    <p><strong>O que é:</strong> um conjunto de dados de teste criado por script, guardado no repositório, aplicado sempre igual. O teste sabe que o cliente 1042 existe, tem dois pedidos e um cupom vencido.</p>
+    <p><strong>Quando uso:</strong> efêmero por PR, sempre. Integrado, como base que é restaurada antes de cada janela de teste.</p>
+
+    <h3>Migrate do zero</h3>
+    <p><strong>O que é:</strong> subir o banco vazio e aplicar todas as migrações de schema em ordem, depois o seed.</p>
+    <p><strong>Quando uso:</strong> quando a mudança mexe em schema. Pega migração que só funciona em cima de um estado que alguém criou à mão em staging três meses atrás. Já vi migração que passava no staging e quebrava em prod porque o staging tinha uma coluna que ninguém lembrava de ter criado.</p>
+
+    <h3>Snapshot</h3>
+    <p><strong>O que é:</strong> uma cópia congelada do banco num estado conhecido, restaurada em segundos.</p>
+    <p><strong>Quando uso:</strong> quando o tempo de setup importa e a hipótese não é sobre volume. Restaurar snapshot de 2 GB leva 30 segundos; aplicar 400 migrações e seed pode levar 6 minutos.</p>
+
+    <h3>Volume sintético para campanha</h3>
+    <p>Para a camada 3, preciso de volume. Duas opções honestas: gerar dado sintético com a mesma distribuição de prod (quantidade de pedidos por cliente, cauda de SKUs, proporção de cupom) ou usar cópia de prod mascarada. Gerar sintético é mais trabalho no começo e mais seguro para sempre.</p>
+
+    <h3>PII: a linha que não negocio</h3>
+    <p>PII é dado pessoal identificável: nome, CPF, e-mail, endereço, telefone. Dump de produção num ambiente de teste com acesso amplo é exposição de dado pessoal, com tudo que a LGPD traz junto. Além do risco legal, dump real gera flake: um cliente real muda de estado, um e-mail real recebe notificação de teste.</p>
+    <p><strong>Exemplo 4.</strong> Um time copiou a base de prod para o staging "só para testar uma migração". Um job de notificação estava ligado no staging. 3.200 clientes reais receberam e-mail de "seu pedido foi cancelado". O teste custou um fim de semana do suporte e uma notificação ao jurídico. Mascaramento antes da cópia, com revisão de quem pode pedir dump, teria evitado tudo.</p>
+
+    <h2>Fila, dono e higiene do compartilhado</h2>
+    <p>O ambiente integrado é um bem comum. Bem comum sem regra se degrada. Três coisas resolvem 80% do caos que já vi.</p>
     <ol>
-      <li>Classifique cada ambiente: o que ele prova e o que não prova.</li>
-      <li>Coloque smoke de PR em efêmero isolado.</li>
-      <li>Nomeie dono do staging compartilhado e regra de limpeza.</li>
-      <li>Proíba dump de prod sem revisão.</li>
-      <li>Para o próximo teste de capacidade, recuse banco 10× menor como prova de pico.</li>
+      <li><strong>Dono nomeado.</strong> Uma pessoa ou um time responde pelo ambiente: decide divergência de config, aprova mudança de infraestrutura, puxa a orelha de quem quebra. "Plataforma cuida" não é dono.</li>
+      <li><strong>Fila ou reserva.</strong> Janela de uso publicada, ou trava automática: quem está rodando e2e segura o ambiente e o deploy dos outros espera. Pode ser um bot no chat, pode ser uma tabela. O formato importa menos que a existência.</li>
+      <li><strong>Reset automático.</strong> Dado restaurado ao seed toda noite, ou antes de cada janela. Sem reset, o staging vira sítio arqueológico: dados criados por testes de seis meses atrás, usuários em estados impossíveis, e testes que só passam porque alguém deixou um registro lá por acaso.</li>
+    </ol>
+    <p><strong>Exemplo 5.</strong> Antes de nomear dono e fila, o time de um cliente media 31% das falhas do e2e em staging como "ambiente". Depois de dono, trava de deploy durante e2e e reset noturno, caiu para 7% em seis semanas. Nenhum centavo a mais de infraestrutura.</p>
+
+    <h2>Custo versus confiança: a conta que levo para a diretoria</h2>
+    <p>Fidelidade custa. Escape também custa. O trabalho é comparar os dois em reais, não em adjetivos.</p>
+    <p><strong>Exemplo 6, completo.</strong> Situação de um trimestre real, números arredondados:</p>
+    <ul>
+      <li>Staging integrado sempre ligado: R$ 22 mil por mês, R$ 66 mil no trimestre.</li>
+      <li>Fila média para usar o staging: 40 minutos, três squads, cerca de 180 esperas por mês. 180 × 40 min = 120 horas por mês de espera parcial. Considerando que metade disso é tempo realmente perdido, 60 horas × R$ 150 = R$ 9 mil por mês, R$ 27 mil no trimestre.</li>
+      <li>Escapes no trimestre: dois bugs de contrato entre serviços, um incidente de campanha por banco subdimensionado.</li>
+      <li>Custo dos escapes: os dois de contrato somaram cerca de R$ 35 mil entre estorno, suporte e hotfix. O de campanha, R$ 180 mil em venda perdida estimada em 3 horas de degradação.</li>
+    </ul>
+    <p>Total: R$ 93 mil de ambiente e espera, R$ 215 mil de escape. Ou seja, o dinheiro investido não comprou proteção contra os riscos que de fato aconteceram.</p>
+    <p>A proposta que fiz:</p>
+    <ul>
+      <li>Efêmero por PR com teste de contrato: R$ 1.500 por mês. Os dois bugs de contrato teriam sido pegos ali.</li>
+      <li>Staging integrado reduzido, com reset noturno e trava de deploy, desligado fora do horário comercial: R$ 11 mil por mês.</li>
+      <li>Pré-prod de campanha com banco em volume real, ligado duas semanas antes de cada data grande: R$ 25 mil por campanha, duas no trimestre.</li>
+    </ul>
+    <p>Novo custo trimestral: R$ 4.500 + R$ 33 mil + R$ 50 mil = R$ 87.500. Praticamente o mesmo dinheiro, apontado para os riscos certos. Esse é o argumento que funciona com diretoria: não "precisamos de mais ambiente", mas "estamos pagando pelo ambiente errado".</p>
+
+    <h2>Declare o que cada ambiente prova</h2>
+    <p>Esta é a prática que mais mudou a qualidade das decisões nos times em que trabalhei. Cada ambiente ganha uma ficha curta, versionada, visível no README da infraestrutura:</p>
+    <ul>
+      <li><strong>Prova:</strong> lista curta do que um verde aqui significa.</li>
+      <li><strong>Não prova:</strong> lista explícita do que um verde aqui <em>não</em> significa.</li>
+      <li><strong>Divergências de prod:</strong> volume de banco, réplicas, pool, cache, terceiros, flags.</li>
+      <li><strong>Dono e janela:</strong> quem responde e quando dá para usar.</li>
+    </ul>
+    <p>Exemplo de ficha do integrado: "Prova que as jornadas de checkout, cadastro e devolução funcionam com os serviços candidatos. Não prova capacidade, latência sob carga nem comportamento com volume real (banco com 4% do volume de prod nas tabelas de pedido). Pool em 80, prod em 60. Gateway em sandbox sem rate limit."</p>
+    <p>Com isso, quando alguém escreve "testado em staging" numa mudança de performance, a resposta já está escrita. Não é opinião do QE contra o dev. É a ficha.</p>
+
+    <h2>Anti-padrões que reconheço de longe</h2>
+    <ul>
+      <li><strong>Staging como prova de tudo.</strong> Um único ambiente respondendo a pergunta de contrato, de jornada e de capacidade. Não responde bem nenhuma.</li>
+      <li><strong>"Prod-like" sem ficha.</strong> Palavra bonita no slide, ninguém sabe o volume do banco.</li>
+      <li><strong>Aumentar pool ou réplicas para "resolver flake".</strong> Some o flake, some também a fidelidade.</li>
+      <li><strong>Efêmero que demora 40 minutos para subir.</strong> Ninguém usa. Se passou de 10 minutos, trate como bug de plataforma.</li>
+      <li><strong>Efêmero que nunca morre.</strong> Namespace órfão de PR fechado há três meses consumindo cluster. TTL obrigatório.</li>
+      <li><strong>Dump de prod "só desta vez".</strong> Nunca é só desta vez.</li>
+      <li><strong>Farm escolhida pelo preço por minuto.</strong> Sem olhar fila, flake e quantos bugs reais ela pega.</li>
+      <li><strong>Retry automático infinito.</strong> Esconde o flake, mantém a fatura, ensina o time a não olhar.</li>
+      <li><strong>Pré-prod ligado o ano inteiro.</strong> Fidelidade de campanha paga em dias sem campanha.</li>
+    </ul>
+
+    <h2>O ritual que mantém isso vivo</h2>
+    <p>Arquitetura de ambiente apodrece em silêncio. Divergência entra por um hotfix, um namespace órfão fica, o flake sobe dois pontos por mês. Uso um ritual mensal de 45 minutos com plataforma, um representante por squad e quem paga a fatura.</p>
+    <ol>
+      <li><strong>Custo por camada no mês</strong>, comparado com o mês anterior.</li>
+      <li><strong>Taxa de flake por ambiente</strong> e as três maiores causas.</li>
+      <li><strong>Tempo médio de fila</strong> no integrado e tempo de subida do efêmero.</li>
+      <li><strong>Escapes do mês</strong>, classificados por camada que deveria ter pego.</li>
+      <li><strong>Divergências novas</strong> nas fichas, aprovadas ou revertidas.</li>
+    </ol>
+    <p>O item 4 é o que mais ensina. Quando um escape aparece, a pergunta não é "por que o QA não pegou", é "qual camada deveria ter respondido essa pergunta, e ela existia?". Se a resposta for "nenhuma", é ali que entra investimento.</p>
+
+    <h2>Se a fatura de cloud chegar alta este mês</h2>
+    <ol>
+      <li>Escreva a ficha de cada ambiente existente: prova, não prova, divergências, dono. Uma página no total.</li>
+      <li>Meça o volume do banco do staging contra prod nas tabelas das jornadas de receita. Se for menos de um terço, tire a palavra "capacidade" de qualquer relatório que venha dali.</li>
+      <li>Calcule custo por bug real pego na suíte e2e do último mês. Se passar de mil reais, mova testes para contrato e componente em efêmero.</li>
+      <li>Coloque TTL nos efêmeros e desligue o integrado fora do horário de uso.</li>
+      <li>Nomeie dono do integrado, ligue trava de deploy durante e2e e reset noturno de dado.</li>
+      <li>Proíba dump de prod sem mascaramento e sem aprovação de quem responde por dado.</li>
+      <li>Para a próxima data de pico, orce pré-prod de campanha com volume real, ligado só nas semanas que precedem o evento.</li>
     </ol>
 
-    <p>Ambiente bom torna o teste verdadeiro. Ambiente caro e mentiroso só aumenta a fatura.</p>
+    <p>Ambiente de teste não precisa ser igual a produção. Precisa ser honesto sobre onde é diferente e barato onde a diferença não importa. Fidelidade é investimento com endereço. Quando ela não tem endereço, o time paga duas vezes: na fatura e no incidente.</p>
 
     <div class="article__foot">
       <a href="../index.html#artigos">← Voltar aos artigos</a>

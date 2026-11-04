@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Acessibilidade: qualidade que a auditoria não vê sozinha — Leandro Lima</title>
-  <meta name="description" content="A11y como qualidade de produto: axe no CI, teclado, leitor de tela, risco legal e como priorizar o que bloqueia o usuário." />
+  <meta name="description" content="Acessibilidade como qualidade de produto: por que o scanner verde não garante jornada usável, risco de exclusão e legal, o que o CI pega e o que exige teclado e leitor de tela, prioridade P0 a P2, design system como raiz e sessão assistida trimestral." />
   <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="article.css" />
   <link rel="stylesheet" href="../covers.css?v=11" />
@@ -23,55 +23,148 @@
     </div>
     <span class="article__tag">Acessibilidade</span>
     <h1>Acessibilidade: qualidade que a auditoria não vê sozinha</h1>
-    <p class="article__meta">Leitura ~15 min · Quality Engineering</p>
+    <p class="article__meta">Leitura ~18 min · Quality Engineering</p>
 
-    <p>O relatório do axe veio verde. No mesmo fluxo, o botão de pagar não tem nome acessível; o modal trava o foco; o toast some em dois segundos sem anúncio. A auditoria automática pegou contraste e alt. Não pegou a jornada. Alguém com leitor de tela ou só teclado não conclui a compra. Isso é bug de produto, não “item de compliance”.</p>
-    <p>A11y no QE é risco: exclusão, processo, reputação. Scanner no CI é piso. O teto é jornada crítica usável por teclado e tecnologia assistiva.</p>
+    <p>Terça, 14h. O pipeline do checkout está verde, inclusive o job de acessibilidade: zero violações críticas no scanner. Na mesma tarde, chega um e-mail ao SAC. Uma cliente cega, que usa leitor de tela no celular, tentou comprar três vezes. Ela chega ao carrinho. Toca em "Finalizar". O leitor anuncia "botão". Só isso. Ela não sabe se é finalizar, remover ou voltar. Arrisca. Abre um modal de endereço. O foco fica na página de trás; o leitor continua lendo o rodapé. Ela fecha o app e compra no concorrente.</p>
+    <p>Nenhuma dessas falhas era invisível. O botão tinha só um ícone, sem nome acessível, mas o ícone estava dentro de um componente que o scanner não renderizou naquele estado. O modal estava correto no HTML estático; o problema era o foco que o JavaScript não movia. A auditoria automática olhou a página. Não percorreu a jornada.</p>
+    <p>Esse é o ponto deste texto. Acessibilidade não é item de compliance que se resolve com relatório. É qualidade de produto: a pergunta é se uma pessoa consegue concluir a tarefa, não se a página passou num conjunto de regras.</p>
 
     <div class="callout">
-      <p>Verde no axe sem smoke de teclado é falso conforto. Trate como cobertura incompleta, não como aprovação.</p>
+      <p>Scanner verde mede o que a página declara. A jornada mede o que a pessoa consegue fazer. Só a segunda paga a conta.</p>
     </div>
 
-    <h2>Visão de risco</h2>
-    <p>Impacto: usuário bloqueado, ação legal, marca. Probabilidade: alta em SPAs com modal, formulário e componente custom. Detectabilidade: baixa se só tem scanner; média com checklist de teclado; alta com sessão assistida periódica.</p>
+    <h2>O vocabulário mínimo</h2>
+    <p>Antes de falar de estratégia, quatro termos que vão aparecer o tempo todo.</p>
+    <p><strong>Tecnologia assistiva</strong> é qualquer software ou hardware que a pessoa usa para interagir com a interface de outro jeito: leitor de tela (NVDA e JAWS no Windows, VoiceOver no Mac e iPhone, TalkBack no Android), ampliador, controle por voz, teclado alternativo, switch. O leitor de tela transforma a interface em fala ou braille e deixa a pessoa navegar por elementos, não por pixels.</p>
+    <p><strong>Nome acessível</strong> é o texto que a tecnologia assistiva anuncia para um elemento. Num botão com a palavra "Pagar", o nome é "Pagar". Num botão só com ícone de lixeira, o nome é vazio, a não ser que alguém declare um, por exemplo com <code>aria-label="Remover item"</code>. Sem nome, o leitor diz "botão" e a pessoa adivinha.</p>
+    <p><strong>Papel e estado</strong> dizem o que o elemento é (botão, link, caixa de seleção, aba) e em que situação está (marcado, expandido, desabilitado). Uma <code>div</code> estilizada como botão parece botão para quem vê, mas para o leitor de tela é texto solto, não recebe foco por teclado e não reage ao Enter.</p>
+    <p><strong>WCAG</strong> são as diretrizes de acessibilidade para conteúdo web, mantidas pelo W3C. Organizadas em critérios com níveis A, AA e AAA. AA é o patamar que a maioria das leis e contratos exige. No Brasil, a Lei Brasileira de Inclusão (13.146/2015) obriga sites de empresas com sede ou representação no país a serem acessíveis, e a referência técnica usual é WCAG nível AA.</p>
+    <p>Com isso dá para separar duas coisas que costumam ser misturadas: <strong>conformidade</strong> (a página atende aos critérios) e <strong>usabilidade acessível</strong> (a pessoa conclui a tarefa). A primeira é necessária. A segunda é o que importa.</p>
 
-    <h2>O que o CI deve pegar</h2>
+    <h2>Visão de risco: impacto, probabilidade, detectabilidade</h2>
+    <p>Trato acessibilidade com a mesma lente de qualquer risco de release.</p>
     <ul>
-      <li>Regras WCAG automatizáveis nas páginas críticas (login, checkout, conta).</li>
-      <li>Falha bloqueante em severidade alta nas rotas core; o resto no backlog com dono.</li>
-      <li>Diff: regressão nova importa mais que dívida antiga sem prioridade.</li>
+      <li><strong>Impacto (I):</strong> três camadas. Exclusão: a pessoa não compra, não abre a conta, não marca a consulta. Legal: reclamação no Procon, ação civil pública do Ministério Público, processo individual, cláusula de contrato público ou B2B que exige conformidade. Reputação: o caso que viraliza é sempre o de uma pessoa concreta que não conseguiu fazer algo básico.</li>
+      <li><strong>Probabilidade (P):</strong> alta em aplicações de página única com modal, menu suspenso, carrossel, formulário com validação dinâmica e componente customizado. Sobe a cada vez que o design system troca texto por ícone ou cria um controle que não é elemento nativo.</li>
+      <li><strong>Detectabilidade (D):</strong> baixa se a única barreira é o scanner. Média com checklist de teclado no PR. Alta com sessão periódica de pessoas que usam tecnologia assistiva no dia a dia.</li>
     </ul>
-    <p>Não abra o scanner em tudo no dia um. Comece pelo caminho de dinheiro e retenção.</p>
+    <p>Pontuando de 1 a 5, com D invertido (5 = difícil de perceber): checkout com botão de ícone sem nome e só scanner no CI fica em I=5, P=4, D=4, ou 80 de 125. A mesma jornada com teclado no PR e sessão assistida trimestral cai para D=2: 40. O código é o mesmo. O que mudou foi a chance de alguém ver o problema antes da cliente.</p>
+    <p>Um número para colocar na mesa: o IBGE (PNS 2019) estimou cerca de 17 milhões de pessoas com deficiência no Brasil, perto de 8% da população com dois anos ou mais. Some idosos com baixa visão, pessoas com lesão temporária no braço e quem usa o celular sob sol forte. Acessibilidade não é nicho. É uma fatia relevante do funil que o produto está jogando fora sem saber.</p>
 
-    <h2>O que o humano (e o QE) ainda precisa</h2>
+    <h2>O que a automação pega, e o que não pega</h2>
+    <p>Scanner automatizado (axe-core, Lighthouse, Pa11y e similares) carrega a página, lê a árvore de acessibilidade e aplica regras. É barato, rápido e pega uma classe de defeito com precisão. Estudos de ferramentas do próprio mercado costumam estimar que regras automáticas cobrem algo entre 30% e 57% dos problemas de WCAG, dependendo de como se conta. O resto exige julgamento ou interação.</p>
+
+    <h3>O que o CI pega bem</h3>
+    <ul>
+      <li>Imagem sem texto alternativo.</li>
+      <li>Contraste de texto abaixo de 4,5:1 (ou 3:1 para texto grande).</li>
+      <li>Campo de formulário sem rótulo associado.</li>
+      <li>Botão ou link sem nome acessível, <em>no estado em que a página foi renderizada</em>.</li>
+      <li>Atributo ARIA inválido ou papel incompatível.</li>
+      <li>Idioma da página não declarado, IDs duplicados, hierarquia de títulos quebrada.</li>
+    </ul>
+
+    <h3>O que o CI não pega</h3>
+    <ul>
+      <li><strong>Ordem de foco lógica.</strong> O scanner sabe que o elemento recebe foco. Não sabe se o Tab salta do campo de CEP para o rodapé.</li>
+      <li><strong>Foco preso ou perdido.</strong> Modal que abre e não recebe foco; modal que fecha e joga o foco para o topo da página.</li>
+      <li><strong>Nome que existe mas é inútil.</strong> Cinco botões com <code>aria-label="Clique aqui"</code> passam na regra. Para quem ouve, é ruído.</li>
+      <li><strong>Mudança dinâmica não anunciada.</strong> Erro de validação que aparece em vermelho e o leitor não fala. Toast de "item adicionado" que some em dois segundos.</li>
+      <li><strong>Estados que só existem depois de interagir.</strong> Menu expandido, passo dois do checkout, erro de pagamento. Se o teste não chega lá, o scanner não vê.</li>
+      <li><strong>Experiência real com o leitor.</strong> O conteúdo é anunciado na ordem certa, com contexto suficiente, sem repetir o mesmo rótulo dez vezes?</li>
+    </ul>
+    <p>É essa diferença que explica a cena do começo. O scanner rodou na página do carrinho no estado inicial. O botão com ícone vivia num componente renderizado depois de uma chamada assíncrona. O modal só existia depois do clique. Verde honesto, cobertura incompleta.</p>
+
+    <h3>Como monto a automação para cobrir mais</h3>
     <ol>
-      <li><strong>Teclado:</strong> Tab/Shift+Tab, Enter/Espaço, Escape no modal, foco visível, ordem lógica.</li>
-      <li><strong>Nome, papel, valor:</strong> botão sem texto, ícone sem label, input sem associação.</li>
-      <li><strong>Estado dinâmico:</strong> erro de formulário anunciado; loading; toast.</li>
-      <li><strong>Contraste e zoom:</strong> conteúdo usável em 200% sem perda de função.</li>
+      <li><strong>Scanner dentro do e2e, não só na página estática.</strong> Rodo a verificação depois de cada passo da jornada crítica: carrinho, modal de endereço aberto, passo de pagamento, mensagem de erro de cartão. Cinco checagens a mais num teste existente custam segundos.</li>
+      <li><strong>Teste de teclado automatizado nas jornadas P0.</strong> Script que só usa Tab, Shift+Tab, Enter, Espaço e Escape para concluir o checkout. Se precisar de clique para avançar, falha. Não substitui o humano, mas pega regressão de foco.</li>
+      <li><strong>Asserção de nome acessível nos controles da jornada.</strong> Em vez de localizar o botão por classe CSS, localizo por papel e nome, como "botão Finalizar compra". Se o nome some, o próprio teste funcional quebra. Acessibilidade vira efeito colateral do seletor certo.</li>
+      <li><strong>Regras no nível do componente.</strong> Cada componente do design system tem histórias (exemplos isolados) de todos os estados e o scanner roda em todas. É o lugar mais barato para pegar defeito, como mostro adiante.</li>
     </ol>
 
-    <h2>Prioridade prática</h2>
-    <p>Bloqueia conclusão da jornada: P0. Dificulta mas há alternativa: P1. Cosmético em página secundária: P2. Design system com componente quebrado multiplica o impacto: priorize a raiz.</p>
+    <h2>O que exige pessoa: teclado e tecnologia assistiva</h2>
+    <p>Mesmo com tudo acima, há uma parte que só gente resolve. Divido em dois níveis.</p>
 
-    <h2>Como encaixar no time</h2>
-    <p>Critério de aceite com “teclado + nome acessível” nas histórias de UI. Storybook ou fixture do componente no CI. Uma sessão assistida por trimestre nas jornadas top. Não transforme a11y em projeto paralelo eterno; embute no Definition of Done das telas que importam.</p>
+    <h3>Smoke de teclado, feito pelo time</h3>
+    <p>Qualquer QE ou dev consegue fazer em dez minutos por jornada. Tiro o mouse da mesa e tento concluir a tarefa.</p>
+    <ul>
+      <li>Consigo chegar a todos os controles com Tab, na ordem em que a tela sugere?</li>
+      <li>O foco é sempre visível? Se o design removeu o contorno, alguém trocou por outra marca?</li>
+      <li>Modal recebe o foco ao abrir, prende o foco dentro enquanto aberto, fecha com Escape e devolve o foco para onde estava?</li>
+      <li>Menus, abas e seletores customizados respondem a setas como o elemento nativo responderia?</li>
+      <li>Com zoom de 200% no navegador, a jornada ainda funciona sem rolagem horizontal e sem conteúdo cortado?</li>
+    </ul>
 
-    <h3>Exemplo de regressão</h3>
-    <p>Design system troca o botão primário por ícone sem <code>aria-label</code>. Scanner pega em Storybook no PR do DS. Sem isso, o checkout inteiro herda o buraco e o axe “na página” vira mil tickets iguais. Priorize a raiz.</p>
+    <h3>Leitor de tela, com critério</h3>
+    <p>Aprender o básico de um leitor de tela leva uma tarde. VoiceOver no Mac (Cmd+F5) ou NVDA no Windows, gratuito. Não para simular a experiência de quem usa há anos; para pegar os defeitos grosseiros: botão anunciado só como "botão", campo sem rótulo, erro que não é falado, ordem de leitura sem sentido.</p>
+    <p>Eu sou honesto sobre o limite disso. Um time vidente testando com leitor de tela acha uns 60% do que uma pessoa cega acha em meia hora, pela minha experiência. Quem usa no dia a dia navega por títulos, pula blocos, usa atalhos que nenhum de nós conhece. Por isso existe o terceiro nível, a sessão assistida, que descrevo no ritual.</p>
 
-    <h2>O que não é estratégia</h2>
-    <p>PDF de auditoria anual sem CI. “Vamos treinar o time” sem gate. Corrigir só contraste e deixar modal sem foco. Tratar a11y como projeto de marketing. Qualidade que protege o produto inclui quem não opera o mouse.</p>
+    <h2>Prioridade: P0, P1, P2</h2>
+    <p>O maior erro em backlog de acessibilidade é tratar 400 achados como iguais. Uso três níveis, com critério objetivo baseado na jornada, não na regra violada.</p>
+    <ul>
+      <li><strong>P0: bloqueia a conclusão de uma jornada de receita ou de direito.</strong> A pessoa não consegue comprar, pagar, cadastrar, cancelar, acessar o próprio dado. Bloqueia release. Exemplos: botão de pagar sem nome; modal de endereço que prende o foco fora dele; campo de CPF que só aceita interação por mouse.</li>
+      <li><strong>P1: dificulta, mas existe alternativa ou contorno.</strong> A pessoa conclui, com esforço desproporcional. Entra na sprint corrente ou seguinte. Exemplos: erro de validação não anunciado, mas o campo fica marcado como inválido; ordem de foco confusa que ainda chega ao fim; contraste baixo num texto auxiliar da jornada.</li>
+      <li><strong>P2: incômodo ou fora das jornadas principais.</strong> Vai para o backlog com dono e prazo. Exemplos: imagem decorativa sem texto alternativo vazio; título fora de ordem numa página institucional; contraste baixo no rodapé.</li>
+    </ul>
+    <p><strong>Exemplo 1.</strong> Auditoria externa entregou 312 achados num app de banco. Antes de distribuir para os squads, cruzei cada um com as cinco jornadas principais (login, extrato, Pix, pagamento de boleto, cartão). Resultado: 9 P0, 41 P1, 262 P2. Os 9 P0 foram corrigidos em duas sprints. Se tivéssemos atacado por ordem do relatório, que era por página, levaríamos meses para chegar ao campo de chave Pix sem rótulo.</p>
+    <p>Uma ressalva: o mesmo defeito pode ser P0 numa tela e P2 noutra. Contraste baixo no botão de confirmar pagamento é P0 para quem tem baixa visão. No rodapé, P2. A regra violada é igual; o risco não.</p>
 
-    <h2>Na próxima sprint</h2>
+    <h2>Design system: onde a causa raiz costuma morar</h2>
+    <p>Em produto com design system, a maioria dos defeitos de acessibilidade não nasce na tela. Nasce no componente e se multiplica por cada lugar que o usa. Corrigir tela por tela é enxugar gelo.</p>
+    <p><strong>Exemplo 2, a regressão em cascata.</strong> O time de design system trocou o botão primário por uma variante com ícone, para economizar espaço no mobile. O componente aceitava um <code>label</code> opcional. Ninguém marcou como obrigatório na variante só com ícone. Em três semanas, 47 telas adotaram a variante. O scanner, rodando por página, abriu 47 tickets iguais em seis squads diferentes. Cada squad corrigiu (ou não) do seu jeito: uns com <code>aria-label</code>, outros com texto escondido, dois ignoraram.</p>
+    <p>A correção de raiz levou meio dia: tornar o rótulo obrigatório na variante de ícone (o build falha sem ele), adicionar história com o caso no catálogo de componentes e ligar o scanner nas histórias no PR do próprio design system. Os 47 tickets fecharam com uma atualização de versão.</p>
+    <p><strong>Exemplo 3, o modal herdado.</strong> Um componente de modal não devolvia o foco ao elemento de origem quando fechava. Não era bloqueante em lugar nenhum isoladamente; o foco ia para o topo da página. Mas estava em 23 jornadas, incluindo a de remoção de cartão salvo, onde a pessoa perdia o contexto e repetia a ação. Um defeito, 23 lugares, um ponto de correção.</p>
+    <p>A regra que sigo: quando o mesmo achado aparece em três telas ou mais, paro de abrir ticket por tela e abro um no componente, com prioridade do pior caso. E o design system tem dono de acessibilidade, não "o QA olha depois".</p>
+
+    <h2>Embutir no Definition of Done</h2>
+    <p>Definition of Done é o conjunto de critérios que toda história precisa cumprir para ser considerada pronta. Acessibilidade que vive fora dele vira projeto paralelo, e projeto paralelo morre na primeira sprint apertada.</p>
+    <p>O que coloco no DoD de histórias de interface que tocam jornada P0 ou P1:</p>
     <ol>
-      <li>Ligue axe (ou equivalente) no CI nas três rotas mais caras.</li>
-      <li>Faça um smoke de teclado no checkout ou equivalente.</li>
-      <li>Liste os cinco componentes mais usados sem label.</li>
-      <li>Nomeie dono de a11y no design system, não só no QA.</li>
+      <li>Scanner sem violação crítica ou séria nos estados novos da tela, incluindo estados que só aparecem após interação.</li>
+      <li>Jornada concluível só com teclado, com foco visível em todos os passos.</li>
+      <li>Todo controle interativo novo tem nome acessível com significado, verificado pelo seletor do teste funcional.</li>
+      <li>Mensagens de erro e confirmação anunciadas pelo leitor de tela (verificação manual rápida com VoiceOver ou NVDA).</li>
+      <li>Se usou componente novo do design system, ele tem história com os estados e scanner rodando.</li>
+    </ol>
+    <p>Para telas fora das jornadas principais, o DoD fica com os itens 1 e 3. Proporcional ao risco, como qualquer outro critério de qualidade. Na prática, isso adiciona de 15 a 30 minutos por história de interface. Corrigir o mesmo defeito depois de uma reclamação formal costuma custar dias, contando jurídico e comunicação.</p>
+
+    <h2>O que não é estratégia de acessibilidade</h2>
+    <p>Muita coisa parece estratégia e só gera papel.</p>
+    <ul>
+      <li><strong>Auditoria anual em PDF sem nada no CI.</strong> Em novembro o relatório está bonito; em fevereiro, três releases depois, metade dos achados voltou e ninguém sabe.</li>
+      <li><strong>Selo ou overlay de acessibilidade.</strong> Widget que promete "tornar o site acessível" com um script. Não corrige estrutura, frequentemente atrapalha o leitor de tela, e já foi citado em ação judicial nos Estados Unidos como prova de que a empresa sabia do problema.</li>
+      <li><strong>Treinamento sem gate.</strong> O time assiste a uma palestra excelente. Nenhum critério muda no DoD. Seis meses depois, tudo igual.</li>
+      <li><strong>Corrigir só o que o scanner aponta.</strong> Contraste perfeito, modal com foco preso. Conformidade parcial com jornada quebrada.</li>
+      <li><strong>Meta de "zero violações".</strong> Vira caça a falso positivo e supressão de regra. Prefiro meta de "zero P0 aberto nas jornadas principais".</li>
+      <li><strong>Acessibilidade como responsabilidade só do QA.</strong> Design decide contraste e foco visível; o design system decide nome e papel; o dev decide foco dinâmico. QE amarra o critério e a evidência, mas não consegue consertar sozinho o que nasce em três outros lugares.</li>
+    </ul>
+
+    <h2>O ritual: sessão assistida trimestral</h2>
+    <p>Uma vez por trimestre, contrato duas a três pessoas que usam tecnologia assistiva no dia a dia: idealmente uma pessoa cega usando leitor de tela, uma pessoa com baixa visão usando ampliação e uma pessoa que navega só por teclado ou switch por limitação motora. Existem consultorias e associações que intermediam isso e pagam as pessoas de forma justa. Pague. É trabalho especializado.</p>
+    <p>Como conduzo:</p>
+    <ol>
+      <li><strong>Escolho três jornadas</strong> entre as de maior receita ou maior impacto de direito (compra, cadastro, cancelamento, consulta de dado pessoal).</li>
+      <li><strong>Cada pessoa tenta concluir cada jornada</strong> no próprio dispositivo, com a própria configuração. Não empresto máquina; o ambiente real dela é o teste.</li>
+      <li><strong>O time observa sem ajudar.</strong> Design, dev e produto na chamada, câmera desligada, sem interromper. A frase que mais muda o time é ouvir alguém dizer "aqui eu desistiria".</li>
+      <li><strong>Registro tempo, pontos de travamento e conclusão</strong> por jornada. Três números simples: concluiu ou não, quanto tempo levou, quantas vezes precisou voltar.</li>
+      <li><strong>Classifico em P0 a P2 no mesmo dia</strong> e cruzo com o que o CI e o smoke de teclado já sabiam. O que a sessão achou e a automação não, vira regra nova ou passo novo no smoke.</li>
+    </ol>
+    <p><strong>Exemplo 4.</strong> Na primeira sessão de um e-commerce de moda, a pessoa cega levou 14 minutos para concluir uma compra que um usuário vidente faz em 3. Travou em dois pontos: o seletor de tamanho (uma grade de <code>div</code> sem papel nem estado) e o campo de cupom, cujo erro aparecia só em cor. Ambos estavam fora do radar do scanner. Corrigidos, a sessão seguinte mediu 6 minutos. O número entrou no painel de qualidade do trimestre, ao lado de conversão e p95.</p>
+    <p>O custo de uma sessão dessas, com três pessoas, preparação e duas horas de observação, raramente passa do custo de uma semana de um engenheiro. É o melhor sinal por real gasto que conheço em acessibilidade.</p>
+
+    <h2>Antes do próximo release passar pelo checkout</h2>
+    <ol>
+      <li>Escolha as três jornadas de maior receita e marque cada uma como P0 para acessibilidade.</li>
+      <li>Rode o scanner dentro do e2e dessas jornadas, depois de cada passo e com modais abertos, não só na página inicial.</li>
+      <li>Troque os seletores dos testes funcionais dessas jornadas para papel e nome acessível. O que quebrar já é achado.</li>
+      <li>Faça o smoke de teclado de dez minutos em cada jornada e registre os bloqueios como P0.</li>
+      <li>Liste os cinco componentes do design system mais usados nessas jornadas e verifique nome, foco e estado em cada um. Nomeie dono de acessibilidade no design system.</li>
+      <li>Coloque os itens de teclado e nome acessível no DoD das histórias de interface que tocam essas jornadas.</li>
+      <li>Agende a primeira sessão assistida para dentro de 90 dias e reserve orçamento para pagar quem participa.</li>
     </ol>
 
-    <p>Acessibilidade boa é produto usável por mais gente. Auditoria sem jornada é só PDF.</p>
+    <p>A cliente do começo não abriu chamado pedindo conformidade com o critério 4.1.2 da WCAG. Ela queria comprar um presente. Quando a qualidade do produto inclui quem não usa mouse nem enxerga a tela, o relatório verde passa a significar alguma coisa. Antes disso, é só um relatório.</p>
 
     <div class="article__foot">
       <a href="../index.html#artigos">← Voltar aos artigos</a>

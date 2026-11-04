@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Automação web que não vira dívida — Leandro Lima</title>
-  <meta name="description" content="O que automatizar na UI, o que deixar fora, flake com causa, seletores estáveis e suíte E2E que paga o próprio custo no CI." />
+  <meta name="description" content="E2E web com disciplina de staff: quatro filtros antes de automatizar, taxonomia de flake com orçamento, Page Object leve, seleção no CI e quando matar cenário sem culpa." />
   <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="article.css" />
   <link rel="stylesheet" href="../covers.css?v=11" />
@@ -23,64 +23,101 @@
     </div>
     <span class="article__tag">Web</span>
     <h1>Automação web que não vira dívida</h1>
-    <p class="article__meta">Leitura ~16 min · Quality Engineering</p>
+    <p class="article__meta">Leitura ~18 min · Quality Engineering</p>
 
-    <p>Sprint após sprint alguém adiciona “mais um e2e porque a história pediu”. Seletor no CSS do botão azul. Dado compartilhado entre jobs. Em três meses o pipeline amarelo vira clima: rerun, mute, “é flake”. Produto para de acreditar. A suíte cresceu. A confiança não.</p>
-    <p>O que escala não é quantidade de testes. É a disciplina do que <em>não</em> entra na UI e a higiene do que entra.</p>
+    <p>Terça, 11h20. O smoke de merge leva 27 minutos. Dos últimos 40 runs, 9 falharam: 22,5%. Seis foram “elemento não encontrado” no botão que o design moveu duas sprints atrás. Dois foram usuário de teste com carrinho sujo. Um foi bug real de frete. O time já normalizou o ritual: rerun, rerun, merge. Produto parou de olhar o vermelho. Em seis meses a suíte passou de 38 para 140 e2es. A taxa de escape em checkout não caiu. Subiu de 1,2% para 1,8% dos deploys.</p>
+    <p>Não faltou Cypress. Faltou filtro. Qualidade de software que protege o produto não é volume de Page Object. É sinal crível no caminho que dói, com custo que o CI aguenta pagar toda hora.</p>
 
     <div class="callout">
-      <p>E2E valida orquestração e experiência na jornada. Não é lugar de retestar cada regra de campo que unitário e API já cobrem. Se o e2e é a única rede, a conta chega em flake.</p>
+      <p>E2E que só existe para “aumentar cobertura” é imposto sobre cada PR futuro. Cobrança sem retorno.</p>
     </div>
 
+    <h2>O que o e2e responde (e o que não)</h2>
+    <p>Antes da ferramenta: a pergunta. E2E na UI responde: “a orquestração da jornada ainda entrega o efeito de negócio que o usuário vê?” Login → busca → carrinho → pay → confirmação. Não responde bem: regra de validação de CPF, arredondamento de juros, política de desconto isolada, shape de JSON entre serviços. Isso é unitário, API ou contrato. Se o e2e é a única rede, você paga flake para retestar o que já tinha prova barata.</p>
+
+    <h2>Visão de risco na suíte</h2>
+    <p>Mesma lógica de release: impacto × probabilidade × detectabilidade.</p>
+    <ul>
+      <li><strong>Impacto alto</strong> no caminho de dinheiro, auth, PII, onboarding de receita: se a orquestração quebrar e só a UI pegar, o e2e fica.</li>
+      <li><strong>Probabilidade</strong> sobe com refactor de front no fluxo quente, feature flag nova, terceiro no meio da jornada.</li>
+      <li><strong>Detectabilidade</strong>: se contrato e API já pegam a quebra, duplicar na UI é vaidade cara. Se a quebra é “botão some depois do redirect do PSP”, só o e2e (ou exploração) vê.</li>
+    </ul>
+    <p>Empate: privilegio impacto irreversível. Banner da home perde para pay. Sempre.</p>
+
     <h2>Quatro filtros antes de abrir o arquivo</h2>
-    <p>Se falhar em dois, não automatizo na UI. Documento o gap e cubro em outra camada ou checklist curto.</p>
+    <p>Se falhar em dois, não automatizo na UI. Documento o gap e cubro em outra camada ou checklist curto com dono.</p>
     <ol>
-      <li><strong>Valor de regressão:</strong> quebra com frequência ou dói caro quando quebra? Checkout, auth, onboarding de receita. Banner de marketing raramente passa.</li>
-      <li><strong>Estabilidade de intenção:</strong> a jornada de negócio sobrevive ao experimento de UX? Se o layout muda toda semana, automatizar pixel é subsidiar o design com manutenção eterna.</li>
+      <li><strong>Valor de regressão:</strong> quebra com frequência ou dói caro? Checkout, auth, onboarding. Banner de marketing raramente passa.</li>
+      <li><strong>Estabilidade de intenção:</strong> a jornada de negócio sobrevive ao experimento de UX? Layout que muda toda semana não merece seletor cosmétique.</li>
       <li><strong>Determinismo:</strong> seed, isolamento, reset. Sem isso é esperança automatizada.</li>
-      <li><strong>Custo no CI:</strong> cada e2e cobra minutos e investigação em todo PR, não só no do autor.</li>
+      <li><strong>Custo no CI:</strong> cada e2e cobra minutos e investigação em todo PR, não só no do autor. 3 minutos × 40 PRs/dia = 2 horas de agente por dia por cenário. Multiplique.</li>
     </ol>
 
-    <h3>Decisão prática</h3>
+    <h3>Decisão prática com números</h3>
+    <p>História pede e2e para “campo de cupom rejeita código expirado”. Unitário do validador já cobre. API do promo service já cobre. Na UI: A/B mexe o formulário a cada quinzena. Filtros 2 e 4 falham. Não abro arquivo. Aceite: caso manual na primeira release da flag + unitário verde.</p>
+    <p>Outra história: “após 3D Secure, o pedido precisa aparecer como pago sem refresh”. Orquestração, redirect, estado. Contrato não vê. Unitário não vê. Filtros 1 e 3 passam se eu tiver seed de pagamento sandbox. Aí sim: um e2e, não cinco variações de bandeira.</p>
+
+    <h2>Onde cada coisa mora</h2>
     <ul>
-      <li><strong>E2E:</strong> caminho feliz das jornadas críticas; um ou dois erros que já geraram incidente (pay falhou e retry).</li>
-      <li><strong>Abaixo da UI:</strong> regra, cálculo, política, contrato de API, máquina de estados.</li>
-      <li><strong>Ainda não:</strong> A/B intenso, captcha, animação, CMS volátil, “para aumentar o número”.</li>
+      <li><strong>E2E:</strong> caminho feliz das jornadas críticas; um ou dois erros que já geraram incidente (pay falhou e retry; estoque zerou no meio).</li>
+      <li><strong>Abaixo da UI:</strong> regra, cálculo, política, contrato de API, máquina de estados, permissão.</li>
+      <li><strong>Ainda não / nunca na UI:</strong> captcha, animação, CMS volátil, pixel-perfect, “para o número de cobertura ficar bonito”.</li>
     </ul>
 
     <h2>Page Object leve, não segundo frontend</h2>
-    <p>Classe com 40 métodos e wait escondido vira produto paralelo. Teste procedural de 200 linhas explode no redesign. No meio: pages/fragments com intenção (<code>cart.submitOrder()</code>), seletor estável, assert de negócio no teste. Preferência por papel/acessibilidade ou data-testid de contrato, não classe cosmética.</p>
+    <p>Classe com 40 métodos e wait escondido vira produto paralelo. Teste procedural de 200 linhas explode no redesign. No meio que eu uso: fragments por intenção (<code>cart.submitOrder()</code>), seletor estável atrás da intenção, assert de negócio no teste. O teste diz o que importa; a page diz como achar.</p>
+    <p><strong>Seletor:</strong> papel/acessibilidade (<code>getByRole('button', { name: 'Pagar' })</code>) ou <code>data-testid</code> de contrato com o front. Classe CSS de tema e XPath absoluto são dívida programada. Contrato escrito: front não remove testid de jornada crítica sem PR coordenado. Sem contrato, cada redesign é massacre silencioso.</p>
 
     <h2>Flake: taxonomia antes do rerun</h2>
-    <p>Rerun sem causa treina o time a ignorar vermelho. Classifico:</p>
+    <p>Rerun sem causa treina o time a ignorar vermelho. Classifico em quatro baldes. Todo vermelho ganha um, ou fica bloqueando merge até classificar.</p>
     <ul>
-      <li><strong>Dado:</strong> conflito de usuário, estoque, estado sujo.</li>
-      <li><strong>Ambiente:</strong> dependência fora, deploy no meio, lente lenta.</li>
-      <li><strong>Seletor/timing:</strong> animação, race, wait frágil.</li>
-      <li><strong>Produto real:</strong> bug. Não é flake.</li>
+      <li><strong>Dado:</strong> conflito de usuário, estoque, estado sujo entre jobs.</li>
+      <li><strong>Ambiente:</strong> dependência fora, deploy no meio do run, staging disputado.</li>
+      <li><strong>Seletor/timing:</strong> animação, race, wait frágil, seletor cosmétique.</li>
+      <li><strong>Produto real:</strong> bug. Não é flake. Não mute.</li>
     </ul>
-    <p>Orçamento: se a suíte crítica falha acima de X% por causas não-produto em sete dias, paro de adicionar cenário e pago a dívida. Número exemplo: 40 runs/dia, 6 falhas “rede/seletor” = 15%. Inaceitável para smoke de merge.</p>
+
+    <h3>Orçamento que eu opero</h3>
+    <p>Smoke crítico: no máximo 5% de falha por causa não-produto em janela de 7 dias. Conta: 40 runs/dia × 7 = 280. Teto = 14 falhas “rede/seletor/dado”. Acima disso, congelo cenário novo e pago a dívida. Sem orçamento, a suíte só engorda o ruído.</p>
+    <p>Exemplo realista: 9 falhas em 40 runs (22,5%). Destas, 6 seletor, 2 dado, 1 produto. Você não tem “CI instável”. Tem 8 débitos de plataforma e 1 bug. Trate cada um no balde certo. O rerun único esconde a proporção.</p>
 
     <h2>Seleção no CI: quem paga a conta</h2>
-    <p>Smoke no PR: minutos, jornadas irreversíveis. Full em main/RC ou sob tag de risco quando o diff toca pagamento. Matriz eterna de browser no PR é vaidade. Tier A no caminho crítico; o resto amostral.</p>
+    <p><strong>Smoke no PR:</strong> minutos, jornadas irreversíveis, Tier de browser mínimo (um Chromium fresco costuma bastar no PR).</p>
+    <p><strong>Full / profunda:</strong> main, RC, ou tag quando o diff toca pagamento, auth, checkout. Matriz eterna de browser no PR é vaidade: 3 browsers × 20 min = 1h de sinal atrasado para pegar o que um smoke + contrato já pegariam.</p>
+    <p>Seleção dinâmica por path do diff ajuda, mas só se a classificação de risco do path for honesta. “Tocou CSS” não isenta se o CSS está no botão de pagar via design system compartilhado.</p>
 
-    <h2>Visão de risco na suíte</h2>
-    <p>Impacto alto + mudança no caminho = e2e obrigatório. Cosmético + A/B = fora. Detectabilidade: se só o e2e pega a quebra de orquestração, ele fica. Se contrato e unitário já pegam, não duplique na UI só para “ficar seguro”.</p>
+    <h3>Conta do pipeline</h3>
+    <p>Smoke de 8 minutos, 50 PRs/dia: ~6,5 horas de agente por dia só de smoke. Se 20% falha e pede rerun, some mais ~1,3h. Se a investigação média de um vermelho ilegível leva 25 minutos de engenheiro e isso acontece 8 vezes/dia, são ~3h de gente. Flake não é “incômodo de CI”. É orçamento queimado. Por isso eu corto cenário antes de pedir mais runners.</p>
+
+    <h2>Dado e isolamento (onde a maioria sangra)</h2>
+    <p>Usuário compartilhado entre jobs paralelos: um limpa o carrinho do outro. SKU com estoque 1: dois testes brigam. Clock de cupom expirando no meio do run. Sem seed por execução (API de setup, factory, ou snapshot resetável), o e2e testa a loteria do staging, não o produto.</p>
+    <p>Padrão que eu exijo: criar dado no before com id único; tear down best-effort; nunca depender de “estado que alguém deixou ontem”. Se o setup precisa de 15 cliques de UI, o teste está testando setup. Prefira API/flag/deep link para chegar no ponto, e UI só no trecho sob risco.</p>
 
     <h2>Sinais de suíte doente</h2>
-    <p>Mais testes, mesma taxa de escape. Rerun como ritual. Ninguém sabe o que o vermelho significa. Page Object maior que o app. Zero seed. Assert de cor de botão no caminho de dinheiro.</p>
+    <ul>
+      <li>Mais testes, mesma ou maior taxa de escape.</li>
+      <li>Rerun como ritual cultural (“só roda de novo”).</li>
+      <li>Ninguém sabe dizer, em uma frase, o que o vermelho significa.</li>
+      <li>Page Object maior que o módulo de front que testa.</li>
+      <li>Zero seed; login compartilhado; assert de cor de botão no caminho de dinheiro.</li>
+      <li>Mute de teste sem ticket e sem prazo de desmute.</li>
+    </ul>
+
+    <h2>Anti-padrões que eu corto no code review</h2>
+    <p>E2e só para cobrir regra de campo. Wait fixo de 5s “porque às vezes falha”. Screenshot como única evidência sem assert de negócio. Dado de produção no teste. Suite que sobe ambiente inteiro por um rename de label. “Vamos automatizar tudo da regressão manual” sem filtro de risco.</p>
 
     <h2>O que cortar nesta sprint sem culpa</h2>
     <ol>
-      <li>Liste os e2e que falharam mais nos últimos 14 dias e classifique a causa.</li>
-      <li>Mate ou reescreva os que são dado/seletor, não produto.</li>
-      <li>Congele novos e2e até o smoke crítico ficar estável.</li>
-      <li>Mova regra de campo para unitário/API onde couber.</li>
-      <li>Padronize um contrato de seletor com o time de front.</li>
-      <li>Meça duração e flake do smoke; publique no canal do time.</li>
+      <li>Liste os e2e que falharam mais nos últimos 14 dias e classifique no balde (dado / ambiente / seletor / produto).</li>
+      <li>Mate ou reescreva os de dado e seletor. Bug de produto vira ticket, não mute.</li>
+      <li>Congele novos e2e até o smoke crítico ficar abaixo do teto de flake.</li>
+      <li>Mova regra de campo e cálculo para unitário/API onde couber; delete o e2e equivalente.</li>
+      <li>Padronize contrato de seletor (role ou testid) com o time de front numa página só.</li>
+      <li>Publique duração e flake do smoke no canal do time. Número visível muda comportamento.</li>
+      <li>Defina dono da suíte: quem pode mute, quem paga dívida, quem libera freeze.</li>
     </ol>
 
-    <p>Suíte boa é chata, curta e crível. Suíte grande e amarela é dívida com disfarce de qualidade.</p>
+    <p>Suíte boa é chata, curta e crível. Suíte grande e amarela é dívida com disfarce de qualidade. O merge confia no sinal. Sem sinal, o e2e só atrasa o dia.</p>
 
     <div class="article__foot">
       <a href="../index.html#artigos">← Voltar aos artigos</a>
