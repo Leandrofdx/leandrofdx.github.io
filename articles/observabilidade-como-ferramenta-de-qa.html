@@ -25,13 +25,13 @@
     <h1>Quando o teste falha e ninguém sabe por quê</h1>
     <p class="article__meta">Leitura ~18 min · Quality Engineering</p>
 
-    <p>O e2e de checkout ficou vermelho no PR do frete. Step 7: <code>Timeout 30000ms exceeded</code>, screenshot de um spinner. Alguém escreveu “flake de novo” e pediu rerun. Vermelho. Rerun. Verde. Merge.</p>
-    <p>Em produção, poucas horas depois, o p95 do pagamento foi de 900 ms para 2,4 s. Abandono no pay de 6% para 17%. Ticket médio R$ 210, uns 1.800 checkouts na janela: cerca de 200 pedidos a menos, perto de R$ 42 mil que não entraram. Rollback no fim da noite.</p>
-    <p>Na post-mortem eu abri o trace de um dos runs vermelhos. Estava lá: o span <code>GET /freight/quote</code> passou a chamar estoque duas vezes, e a segunda espera 1,7 s no pool. O teste tinha visto a verdade. Faltava alguém conseguir ler.</p>
-    <p>Esse é o ponto do artigo inteiro: o teste já é um gerador de tráfego controlado, com intenção conhecida e resultado esperado. Se o sistema por baixo dele é mudo, cada falha vira palpite. Se o sistema fala, cada falha vira diagnóstico.</p>
+    <p>O time mudou o cálculo de frete. Antes de liberar, o teste automático do checkout falhou: a tela de pagamento ficou girando e o botão “pagar” nunca apareceu. No chat do PR alguém escreveu “flake de novo”. Rodaram de novo. Vermelho. Rodaram de novo. Verde. Merge.</p>
+    <p>Poucas horas depois, a mesma tela começou a travar para cliente de verdade. O pagamento, que costumava responder em menos de um segundo, passou a demorar quase dois segundos e meio para muita gente. A taxa de quem desistia na hora de pagar subiu de 6% para 17%. Ticket médio de R$ 210, uns 1.800 checkouts na janela: cerca de 200 pedidos a menos, perto de R$ 42 mil que não entraram. Rollback no fim da noite.</p>
+    <p>Na post-mortem eu abri o registro do teste que tinha falhado. Estava tudo lá: ao cotar o frete, o sistema passou a consultar o estoque duas vezes, e a segunda consulta esperava 1,7 s numa fila de conexão. O teste não estava “instável”. Ele tinha visto a verdade. O que faltava era alguém conseguir ler o que o produto estava dizendo sob a tela.</p>
+    <p>Esse é o ponto do artigo inteiro. Um teste de checkout não é só um “passou / falhou”. É um cliente controlado: mesma jornada, mesma intenção, mesmo resultado esperado. Se o produto por baixo é mudo, cada falha vira palpite e o time trata como azar. Se o produto fala, cada falha vira diagnóstico, e o merge não acontece no escuro.</p>
 
     <div class="callout">
-      <p>Rerun sem trace é jogar fora a única reprodução barata que você vai ter daquele bug.</p>
+      <p>Rerun sem conseguir ler o que o produto fez é jogar fora a única reprodução barata daquele bug.</p>
     </div>
 
     <h2>Primeiro, as palavras</h2>
@@ -70,8 +70,8 @@
       <li><strong>Probabilidade:</strong> chance de a mudança introduzir a falha. Sobe com número de hops, dependência compartilhada, pool, fila, cache. Um fluxo que passa por 7 serviços tem mais chance de regressão escondida que um CRUD isolado.</li>
       <li><strong>Detectabilidade:</strong> quão cedo e quão claro a falha aparece. Aqui a observabilidade mexe diretamente.</li>
     </ul>
-    <p>A cena da quinta, em números: impacto 5, probabilidade 3, detectabilidade 4 (o teste viu, mas o sinal era um timeout genérico com screenshot de spinner). Score 5 × 3 × 4 = 60. Com o link do trace no relatório e o span de frete destacado, a detectabilidade cai para 2. Score 30. Nada no código do produto mudou. Mudou a chance de alguém entender o vermelho antes do merge.</p>
-    <p>É por isso que não aceito o argumento “observabilidade é coisa de SRE”. SRE cuida de produção. A pergunta de QA é outra: o sinal que eu já tenho às 16h40 é legível o bastante para impedir o incidente das 18h50?</p>
+    <p>A cena do frete, em números: impacto 5, probabilidade 3, detectabilidade 4 (o teste viu, mas o sinal era “tela girando, botão não apareceu”). Score 5 × 3 × 4 = 60. Com o link do registro completo no relatório e o trecho do frete destacado, a detectabilidade cai para 2. Score 30. Nada no código do produto mudou. Mudou a chance de alguém entender o vermelho antes do merge.</p>
+    <p>É por isso que não aceito o argumento “observabilidade é coisa de SRE”. SRE cuida de produção. A pergunta de QA é outra: o sinal que eu já tenho no PR é legível o bastante para impedir o incidente da tarde?</p>
 
     <h2>Failure modes que tornam o teste cego</h2>
     <p>Antes de falar do que montar, o que costumo encontrar quando chego num time.</p>
