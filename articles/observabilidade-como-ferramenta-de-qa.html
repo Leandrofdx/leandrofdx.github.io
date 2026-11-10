@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Quando o teste falha e ninguém sabe por quê — Leandro Lima</title>
+  <title>O checkout falhou no teste. O time só soube depois do prejuízo — Leandro Lima</title>
   <meta name="description" content="Observabilidade para QA: trace, span, métrica e log correlacionados, OpenTelemetry no ambiente de teste, ritual de falha e2e com trace_id, prova de correção com sinal, sampling, cardinalidade e link no relatório de CI." />
   <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="article.css" />
@@ -22,10 +22,10 @@
       <span class="cover__c"></span>
     </div>
     <span class="article__tag">Observabilidade</span>
-    <h1>Quando o teste falha e ninguém sabe por quê</h1>
+    <h1>O checkout falhou no teste. O time só soube depois do prejuízo</h1>
     <p class="article__meta">Leitura ~18 min · Quality Engineering</p>
 
-    <p>O time mudou o cálculo de frete. Antes de liberar, o teste automático do checkout falhou: a tela de pagamento ficou girando e o botão “pagar” nunca apareceu. No chat do PR alguém escreveu “flake de novo”. Rodaram de novo. Vermelho. Rodaram de novo. Verde. Merge.</p>
+    <p>O time mudou o cálculo de frete. Antes de liberar, o teste automático do checkout falhou: a tela de pagamento ficou girando e o botão “pagar” nunca apareceu. No chat do PR alguém escreveu que era falha intermitente de novo e pediu para rodar outra vez. Vermelho. Rodaram de novo. Verde. Merge.</p>
     <p>Poucas horas depois, a mesma tela começou a travar para cliente de verdade. O pagamento, que costumava responder em menos de um segundo, passou a demorar quase dois segundos e meio para muita gente. A taxa de quem desistia na hora de pagar subiu de 6% para 17%. Ticket médio de R$ 210, uns 1.800 checkouts na janela: cerca de 200 pedidos a menos, perto de R$ 42 mil que não entraram. Rollback no fim da noite.</p>
     <p>Na post-mortem eu abri o registro do teste que tinha falhado. Estava tudo lá: ao cotar o frete, o sistema passou a consultar o estoque duas vezes, e a segunda consulta esperava 1,7 s numa fila de conexão. O teste não estava “instável”. Ele tinha visto a verdade. O que faltava era alguém conseguir ler o que o produto estava dizendo sob a tela.</p>
     <p>Esse é o ponto do artigo inteiro. Um teste de checkout não é só um “passou / falhou”. É um cliente controlado: mesma jornada, mesma intenção, mesmo resultado esperado. Se o produto por baixo é mudo, cada falha vira palpite e o time trata como azar. Se o produto fala, cada falha vira diagnóstico, e o merge não acontece no escuro.</p>

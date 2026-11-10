@@ -204,7 +204,7 @@ budget: {max_steps: 8, max_tokens: 40000}</code></pre>
 
     <h2>Em produção: trajetória rastreada, amostra revisada, gate em toda troca</h2>
     <h3>Trace de trajetória</h3>
-    <p>Cada episódio vira um trace, com um span por chamada de modelo e por chamada de ferramenta. As convenções semânticas de GenAI do OpenTelemetry definem nomes padrão, como <code>gen_ai.request.model</code>, <code>gen_ai.usage.input_tokens</code> e <code>gen_ai.tool.name</code>. Ainda estão em desenvolvimento, então fixo a versão. Em cima delas, adiciono <code>ticket_id</code>, <code>order_id</code>, versão do prompt e versão do schema das ferramentas. O raciocínio geral de trace para QA está em <a href="observabilidade-como-ferramenta-de-qa.html">Quando o teste falha e ninguém sabe por quê</a>.</p>
+    <p>Cada episódio vira um trace, com um span por chamada de modelo e por chamada de ferramenta. As convenções semânticas de GenAI do OpenTelemetry definem nomes padrão, como <code>gen_ai.request.model</code>, <code>gen_ai.usage.input_tokens</code> e <code>gen_ai.tool.name</code>. Ainda estão em desenvolvimento, então fixo a versão. Em cima delas, adiciono <code>ticket_id</code>, <code>order_id</code>, versão do prompt e versão do schema das ferramentas. O raciocínio geral de trace para QA está em <a href="observabilidade-como-ferramenta-de-qa.html">O checkout falhou no teste. O time só soube depois do prejuízo</a>.</p>
 
     <h3>Detectores em 100% do tráfego</h3>
     <p>Cinco sinais são baratos para rodar em todo episódio, sem modelo julgando: sucesso prematuro, loop, chamada proibida, passos acima do orçamento, reembolso maior que o item. Cada um vira métrica com alerta. O caso da Mariana teria disparado o primeiro detector no mesmo minuto.</p>
