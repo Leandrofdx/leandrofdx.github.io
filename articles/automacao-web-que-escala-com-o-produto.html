@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Mais testes no checkout. O cliente ainda pagou duas vezes — Leandro Lima</title>
+  <title>A suíte triplicou. O caminho crítico estava desligado — Leandro Lima</title>
   <meta name="description" content="Automação web com visão de risco e de produto: quando o E2E protege de verdade, o que descer abaixo da tela, Page Object leve, contrato de seletor, falha intermitente com orçamento, tiers de CI e um plano de poda com números." />
   <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="article.css" />
@@ -22,12 +22,12 @@
       <span class="cover__c"></span>
     </div>
     <span class="article__tag">Web</span>
-    <h1>Mais testes no checkout. O cliente ainda pagou duas vezes</h1>
+    <h1>A suíte triplicou. O caminho crítico estava desligado</h1>
     <p class="article__meta">Leitura ~18 min · Quality Engineering</p>
 
-    <p>Em agosto, um cliente pagou o mesmo pedido duas vezes no Pix. O checkout gerou o QR. Ele abriu o app do banco e pagou. A confirmação no site demorou. A tela tratou como falha, ofereceu “tentar de novo” e criou uma segunda cobrança, com outro código. Ele achou que a primeira não tinha entrado e pagou de novo no banco. Duas liquidações, um pedido. O bug era falta de idempotência no retry: a confirmação atrasada não reaproveitava a cobrança já criada. O teste que pegaria aquilo existia. Estava desligado “temporariamente” havia 34 dias, porque falhava uma vez a cada cinco execuções e o time classificou como falha intermitente. Ninguém olhou por quê. A intermitência era o próprio bug: uma condição de corrida entre a tela de espera e a criação da cobrança.</p>
+    <p>Em agosto, a operadora cobrou o cartão duas vezes no mesmo pedido. O cliente tocou em pagar. A confirmação demorou. A tela ofereceu “tentar de novo”. O segundo toque mandou outra autorização para o adquirente, sem a mesma chave de idempotência. Duas capturas. Um pedido. O teste que pegaria aquilo existia. Estava desligado “temporariamente” havia 34 dias, porque falhava uma vez a cada cinco execuções e o time classificou como falha intermitente. Ninguém olhou por quê. A intermitência era o próprio bug: uma condição de corrida no retry do pagamento.</p>
     <p>Em janeiro, a suíte que cobria o checkout tinha 140 testes e respondia em cerca de 9 minutos. Em setembro tinha 420 e demorava 47. A cada dia o time abria uns 60 pedidos de mudança; quase 30% precisavam rodar a suíte de novo porque a primeira execução tinha falhado. Cada rodada a mais era quase uma hora de espera. Uns 13 horas de engenharia por dia olhando a esteira. A R$ 150 a hora, perto de R$ 39 mil por mês em espera, sem contar a máquina.</p>
-    <p>A suíte cresceu três vezes. A confiança nela caiu. O cliente pagou a conta. Quando cheguei, a primeira coisa que fiz não foi escrever teste. Foi apagar.</p>
+    <p>A suíte cresceu três vezes. A confiança nela caiu. Volume de caso não é cobertura. Quando cheguei, a primeira coisa que fiz não foi escrever teste. Foi apagar.</p>
 
     <div class="callout">
       <p>Uma suíte em que ninguém confia não é rede de segurança: é custo fixo que treina o time a ignorar falha.</p>
@@ -49,7 +49,7 @@
     <p>Decido o que entra na tela com a mesma conta que uso para qualquer decisão de teste: <strong>impacto × probabilidade × detectabilidade</strong>, de 1 a 5 cada. Detectabilidade aqui é específica: quão mal <em>as outras camadas</em> pegam essa falha. Se o contrato ou o unitário já pegam, a detectabilidade é baixa e o E2E agrega pouco.</p>
     <p>Três cenários reais da suíte de setembro:</p>
     <ul>
-      <li><strong>Checkout com Pix e retry:</strong> impacto 5 (dinheiro; segunda cobrança se a confirmação atrasa), probabilidade 4 (fluxo mexido toda sprint), detectabilidade 4 (a falha é de orquestração entre tela, backend e provedor; nenhuma camada isolada vê). 5 × 4 × 4 = 80. E2E obrigatório, no tier do pedido de mudança.</li>
+      <li><strong>Checkout com cartão e retry:</strong> impacto 5 (dinheiro; segunda autorização se a confirmação atrasa), probabilidade 4 (fluxo mexido toda sprint), detectabilidade 4 (a falha é de orquestração entre tela, backend e adquirente; nenhuma camada isolada vê). 5 × 4 × 4 = 80. E2E obrigatório, no tier do pedido de mudança.</li>
       <li><strong>Cálculo de desconto progressivo do cupom:</strong> impacto 4, probabilidade 4, detectabilidade 2 (é uma função pura; unitário pega com precisão). 4 × 4 × 2 = 32. Unitário com tabela de casos, mais um único E2E que confirma que o desconto aparece no total.</li>
       <li><strong>Banner de campanha na home:</strong> impacto 1, probabilidade 5 (muda toda semana), detectabilidade 1 (qualquer pessoa vê). 1 × 5 × 1 = 5. Fora da automação.</li>
     </ul>
@@ -82,10 +82,10 @@
       <li><strong>Máquina de estados:</strong> pedido criado, pago, enviado, cancelado. Transições válidas e inválidas testadas no serviço.</li>
       <li><strong>Erro de dependência:</strong> provedor de pagamento devolve erro, antifraude demora 8 s. Simulado no nível de API ou componente, onde o controle é total.</li>
     </ul>
-    <p>O que fica no E2E: caminho principal das jornadas críticas, mais um ou dois cenários de erro que já viraram incidente e que só aparecem na orquestração (o retry do Pix é o exemplo perfeito). A proporção que costumo ver em suítes saudáveis é algo como 1 E2E para 10 de API e 50 unitários na mesma área. Quando a suíte inverte isso, ela está pagando caro por cobertura que poderia ser barata.</p>
+    <p>O que fica no E2E: caminho principal das jornadas críticas, mais um ou dois cenários de erro que já viraram incidente e que só aparecem na orquestração (o retry do cartão é o exemplo perfeito). A proporção que costumo ver em suítes saudáveis é algo como 1 E2E para 10 de API e 50 unitários na mesma área. Quando a suíte inverte isso, ela está pagando caro por cobertura que poderia ser barata.</p>
 
     <h2>Page Object leve, não um segundo frontend</h2>
-    <p><strong>Page Object</strong> é um padrão em que cada página ou parte da página vira um objeto no código de teste, escondendo os seletores e expondo ações com nome de intenção. O teste chama <code>checkout.payWithPix()</code> em vez de procurar três botões.</p>
+    <p><strong>Page Object</strong> é um padrão em que cada página ou parte da página vira um objeto no código de teste, escondendo os seletores e expondo ações com nome de intenção. O teste chama <code>checkout.payWithCard()</code> em vez de procurar três botões.</p>
     <p>O padrão é bom. O que estraga é o exagero. Os anti-padrões que mais encontro:</p>
     <ul>
       <li><strong>God Page:</strong> uma classe <code>CheckoutPage</code> com 60 métodos, de <code>clickBlueButton</code> a <code>validateAllFieldsAndSubmitAndWaitForSuccess</code>. Ninguém sabe o que ela faz por inteiro; todo mundo tem medo de mexer.</li>
@@ -129,7 +129,7 @@
       <li><strong>Ambiente:</strong> publicação no meio do run, serviço de teste reiniciando, recurso saturado por outro time. Sinal: várias suítes falham ao mesmo tempo.</li>
       <li><strong>Dependência externa:</strong> sandbox do provedor de pagamento, serviço de CEP público. Sinal: erro ou lentidão no salto de terceiro.</li>
       <li><strong>Infra do runner:</strong> falta de memória no container, navegador que trava. Sinal: falha antes de qualquer chamada sair.</li>
-      <li><strong>Produto:</strong> o sistema realmente se comporta de forma intermitente. Condição de corrida, cache inconsistente, retry que cria cobrança nova. <em>Isso não é falha de teste. É bug.</em> E é exatamente o que o mute esconde, como no Pix de agosto.</li>
+      <li><strong>Produto:</strong> o sistema realmente se comporta de forma intermitente. Condição de corrida, cache inconsistente, retry que manda autorização de novo. <em>Isso não é falha de teste. É bug.</em> E é exatamente o que o mute esconde, como no cartão de agosto.</li>
     </ul>
 
     <h3>Por que falha pequena vira suíte que ninguém acredita</h3>
@@ -144,7 +144,7 @@
     </ul>
     <p>Exemplo da semana em que medi pela primeira vez: o tier do pedido de mudança rodou 40 vezes por dia, 280 runs na semana. 42 falharam. Classificados: 6 eram produto (bug real), 36 não-produto. 36 / 280 = 12,9%. Mais de seis vezes o orçamento. A distribuição: 15 de dado, 11 de seletor e tempo, 7 de ambiente, 3 de terceiro.</p>
     <p>Regra que acompanha o orçamento: <strong>se o tier estoura, para de entrar E2E novo nele</strong> até voltar ao limite. Não é punição; é a mesma lógica de orçamento de erro de operação. Você gastou a confiança disponível, então a próxima sprint paga dívida.</p>
-    <p>E a regra de quarentena: teste que falha de forma intermitente acima de 2% em 7 dias sai do bloqueio de merge, continua rodando, ganha dono nomeado e 10 dias úteis. No fim do prazo, ou está corrigido e volta, ou é apagado. Nunca fica no limbo. O teste do Pix teria sido investigado no dia 10, não esquecido no dia 34.</p>
+    <p>E a regra de quarentena: teste que falha de forma intermitente acima de 2% em 7 dias sai do bloqueio de merge, continua rodando, ganha dono nomeado e 10 dias úteis. No fim do prazo, ou está corrigido e volta, ou é apagado. Nunca fica no limbo. O teste do cartão teria sido investigado no dia 10, não esquecido no dia 34.</p>
 
     <h2>Seleção na esteira: quem paga a conta</h2>
     <p>Rodar tudo em todo pedido de mudança é a forma mais cara de ter feedback lento. Desenhei quatro tiers:</p>
