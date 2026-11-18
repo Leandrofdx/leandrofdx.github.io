@@ -144,7 +144,7 @@ test.each([
       <li><strong>Excesso de mock:</strong> tudo mockado, inclusive funções puras. O teste verifica a ordem das chamadas internas, não o resultado.</li>
       <li><strong>Teste sem asserção:</strong> chama a função e termina, ou afirma só <code>toBeDefined()</code>. Conta para cobertura, não mata nenhum mutante.</li>
       <li><strong>Acoplamento a detalhe de implementação:</strong> confere que um método privado foi chamado duas vezes ou que o SQL gerado tem uma string exata.</li>
-      <li><strong>Espera fixa em teste de UI:</strong> <code>sleep(3000)</code> antes de clicar. Passa na máquina rápida, falha no CI carregado. É a receita do flake, que detalho em <a href="automacao-web-que-escala-com-o-produto.html">A suíte engordou. O cliente ainda pagou duas vezes</a>.</li>
+      <li><strong>Espera fixa em teste de UI:</strong> <code>sleep(3000)</code> antes de clicar. Passa na máquina rápida, falha no CI carregado. É a receita do flake, que detalho em <a href="automacao-web-que-escala-com-o-produto.html">Mais testes no checkout. O cliente ainda pagou duas vezes</a>.</li>
       <li><strong>Seletor frágil:</strong> <code>div:nth-child(3) &gt; span.btn-primary</code>, copiado do DOM atual. O mesmo artigo trata de contrato de seletor com o time de front.</li>
       <li><strong>Cenário duplicado:</strong> oito testes que exercitam o mesmo caminho com dados levemente diferentes. Infla a contagem, não a verificação.</li>
     </ul>
