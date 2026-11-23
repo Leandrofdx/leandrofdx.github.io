@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>O app subiu na loja. O link da campanha abriu a home — Leandro Lima</title>
+  <title>A promoção mandava para o pagamento. No iPhone abria a home — Leandro Lima</title>
   <meta name="description" content="Automação mobile para release semanal com visão de risco: matriz de devices por telemetria, smoke versus profunda, falha intermitente no celular, farm versus nuvem, deep link e go/no-go que não é porcentagem de cenários passando." />
   <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="article.css" />
@@ -22,10 +22,10 @@
       <span class="cover__c"></span>
     </div>
     <span class="article__tag">Mobile</span>
-    <h1>O app subiu na loja. O link da campanha abriu a home</h1>
+    <h1>A promoção mandava para o pagamento. No iPhone abria a home</h1>
     <p class="article__meta">Leitura ~18 min · Quality Engineering</p>
 
-    <p>A campanha de PIX no iOS levou 380 mil cliques. Em vez de abrir o pagamento, o app abria a home. Conversão caiu 31%. O arquivo que associa o domínio ao aplicativo tinha mudado num deploy do site. Ninguém no time do app tinha tocado no código daquela semana.</p>
+    <p>Mídia paga mandou cerca de 380 mil pessoas para um link que deveria abrir a tela de pagamento no app. No iPhone, quem clicava caía na home. A conversão no iOS caiu 31%. O arquivo que associa o domínio ao aplicativo tinha mudado num deploy do site. Ninguém no time do app tinha tocado no código daquela semana.</p>
     <p>A suíte do release tinha 640 cenários e rodava quase duas horas. Quase quatro em cada cinco passaram. Dos que falharam, a maior parte estava em celulares que somam 1% das sessões, ou no mesmo diálogo de permissão de sempre. No chat: “é falha intermitente, sempre foi”. O binário subiu. Nenhum cenário abria um link de verdade num iPhone de verdade.</p>
     <p>Não faltou ferramenta. Faltou critério: matriz escolhida por catálogo, suíte que testa mais a rack de celulares do que o produto, e decisão de publicação baseada em porcentagem. Para release semanal, a frase que eu uso é curta: <strong>caminho de dinheiro curto e duro em poucos aparelhos certos, profundidade fora do caminho crítico, e ritual de loja tratado como ritual, não como teste</strong>.</p>
 
@@ -57,8 +57,8 @@
     <p>Exemplo real de um app de varejo com carteira, pontuado numa sexta à tarde com produto e engenharia:</p>
     <ul>
       <li>Login com biometria: I 5 × P 3 × D 3 = <strong>45</strong>.</li>
-      <li>Pagamento PIX dentro do app: I 5 × P 3 × D 4 = <strong>60</strong>. D alto porque a falha comum não é crash, é tela que não avança.</li>
-      <li>Deep link de campanha para PIX: I 4 × P 3 × D 5 = <strong>60</strong>. Depende de arquivo no domínio, muda sem PR do app, ninguém vê até a campanha sair.</li>
+      <li>Pagamento com cartão no app: I 5 × P 3 × D 4 = <strong>60</strong>. D alto porque a falha comum não é crash, é tela que não avança.</li>
+      <li>Link de promoção para a tela de pagamento: I 4 × P 3 × D 5 = <strong>60</strong>. Depende de arquivo no domínio, muda sem PR do app, ninguém vê até a mídia ir ao ar.</li>
       <li>Assinatura in-app (compra pela loja): I 5 × P 2 × D 5 = <strong>50</strong>.</li>
       <li>Push de status de pedido: I 3 × P 3 × D 4 = <strong>36</strong>.</li>
       <li>Upgrade da versão N-1 para N sem perder sessão: I 4 × P 2 × D 4 = <strong>32</strong>.</li>
@@ -108,7 +108,7 @@
     <h3>Exemplo de corte</h3>
     <p>Partindo da pontuação I×P×D acima e de uma suíte de 640 cenários herdada:</p>
     <ul>
-      <li><strong>Smoke (Tier A, todo RC, bloqueia):</strong> instalação limpa e primeira abertura; login com senha e com biometria simulada; busca e adição ao carrinho; PIX até a tela de QR gerado, com backend de sandbox; cartão salvo até a confirmação; abertura de deep link de PIX a partir de URL real; logout e kill do processo com retomada de sessão. São 11 cenários, 9 minutos e 40 segundos em seis devices em paralelo.</li>
+      <li><strong>Smoke (Tier A, todo RC, bloqueia):</strong> instalação limpa e primeira abertura; login com senha e com biometria simulada; busca e adição ao carrinho; cartão salvo até a confirmação, com backend de sandbox; abertura do link de promoção a partir de URL real no navegador do sistema; logout e kill do processo com retomada de sessão. São 10 cenários, cerca de 9 minutos em seis devices em paralelo.</li>
       <li><strong>Profunda (Tier B, noturna, informa):</strong> fluxos de permissão negada e concedida depois; push de status de pedido; modo offline e reconexão no carrinho; upgrade de N-1 para N com sessão viva; tablet e fonte grande; troca de idioma; 58 cenários de regressão de tela que mudaram nos últimos 90 dias. Total de 74 minutos.</li>
       <li><strong>Saiu da automação:</strong> 212 cenários que validavam texto e layout de telas estáveis há mais de um ano e nunca pegaram bug. Viraram teste de snapshot de componente no build, que roda em 40 segundos sem device.</li>
       <li><strong>Apagado:</strong> 180 cenários duplicados ou cobrindo regra de negócio que já tem teste de API. Teste de UI para validar cálculo de frete é pagar device para testar backend.</li>
@@ -181,7 +181,7 @@
     <p>Rejeição na revisão não é bug de regressão. É ritual com checklist e dono: permissões declaradas batem com o uso, texto de privacidade atualizado, conta de demonstração funcionando para o revisor, nenhum link para pagamento externo onde a política proíbe. Eu mantenho esse checklist como item do go/no-go, com o nome de quem confirmou. Automatizar isso com Appium seria teatro.</p>
 
     <h2>Go/no-go não é porcentagem de verde</h2>
-    <p>"Estamos com 94% de verde" não diz nada. Depende do que são os 6%. Vi release com 94% bloquear corretamente porque o vermelho era o PIX no Galaxy A com Android 14, que é 18% das sessões. E vi release com 82% sair corretamente porque os vermelhos eram layout de tablet em Tier C e um cenário em quarentena com checagem manual feita.</p>
+    <p>"Estamos com 94% de verde" não diz nada. Depende do que são os 6%. Vi release com 94% bloquear corretamente porque a falha era o pagamento no Galaxy A com Android 14, que é 18% das sessões. E vi release com 82% sair corretamente porque as falhas eram layout de tablet em Tier C e um cenário em quarentena com checagem manual feita.</p>
     <p>Meu critério de go/no-go para o RC semanal, escrito e assinado por QA, engenharia e produto:</p>
     <ol>
       <li><strong>Smoke do Tier A 100% verde</strong> no binário assinado do RC, não no build do PR.</li>
